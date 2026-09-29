@@ -9,7 +9,7 @@ How a change reaches `main` and Azure, what protects it at each stop, and what's
 
 ## The one rule
 
-**Agents never skip or change enforcement without your approval.** Enforcement means the files listed in `.github/CODEOWNERS`: the hooks, the agent guard, the gates and what they read, the tests of the gate and the guard, the access tests, the files that decide how tests run, the agent rules files (`AGENTS.md`, and `CLAUDE.md`, which imports it), and VS Code's workspace settings and tasks (`.vscode/` and workspace files). It also means Claude Code's and VS Code's settings files, and the repository's rules and settings on GitHub. Every other change merges when the checks pass.
+**Agents never skip or change enforcement without your approval.** Enforcement means the files listed in `.github/CODEOWNERS`: the hooks, the agent guard, the gates and what they read, the tests of the gate and the guard, the access tests, the files that decide how tests run, the agent rules files (`AGENTS.md`, and `CLAUDE.md`, which imports it), the instructions agents are handed (the Claude Code skills, the setup prompt and the prompt templates), the audit records (the checks inventory, the control mapping and the AI risk mapping), and VS Code's workspace settings and tasks (`.vscode/` and workspace files). It also means Claude Code's and VS Code's settings files, and the repository's rules and settings on GitHub. Every other change merges when the checks pass.
 
 How you approve:
 

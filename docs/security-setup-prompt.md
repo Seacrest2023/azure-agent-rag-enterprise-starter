@@ -150,10 +150,12 @@ The stack gives a project strong technical controls, but it isn't certified, and
    - VS Code's workspace settings and tasks (`.vscode/`, and `*.code-workspace` files anywhere in the repository), which can switch Copilot Chat's hooks off or run commands the guard doesn't see;
    - the gate's and the guard's tests (`tests/gate/`, `tests/hooks/`);
    - the files that decide how tests run: `tests/__init__.py`, `conftest.py`, `tests/conftest.py`, `pyproject.toml`, `pytest.ini` and `.pytest.ini`;
-   - the agent rules files: `AGENTS.md`, and `CLAUDE.md`, which imports it.
+   - the agent rules files: `AGENTS.md`, and `CLAUDE.md`, which imports it;
+   - the instructions agents are handed: the Claude Code skills (`.claude/skills/`), this setup prompt, and the prompt templates (`docs/prompts/`);
+   - the audit records: `docs/checks-inventory.md`, `docs/control-mapping.md` and `docs/ai-risk-mapping.md`.
 
    Add any test folder the project treats as enforcement, such as its access tests. Leave the app's other tests out, so everyday work needs no approval. Keep `.claude/settings.local.json` in `.gitignore` too: it's personal, and a shared copy could switch hooks off for everyone. Set the environment name in `.github/workflows/azure-login-check.yml` if the project's isn't `dev`.
-4. Create the blocked-names list: keep the header comment, then `python scripts/check_blocked_terms.py --add "<name>"` for each name, and `--add --paths "<name>"` for path-only names.
+4. Create the blocked-names list: keep the header comment, then `python scripts/check_blocked_terms.py --add "<name>"` for each name, and `--add --paths "<name>"` for path-only names. In a public repository the list is public too, and its hashes aren't salted, so a short name can be recovered by hashing every word of its length. A name that mustn't become known can go in a list outside the repository, with `BLOCKED_TERMS_FILE` set to it for the git hooks. Tell the owner it's a local check they keep, not enforcement: the pull request gate checks only the repository's list, and the guard doesn't protect a file outside the repository, so the list belongs where agents can't write.
 5. Pin everything to current versions rather than copying old pins:
    - Actions: `tag=$(gh api repos/actions/checkout/releases/latest --jq .tag_name); gh api repos/actions/checkout/commits/$tag --jq .sha`, for each action.
    - pre-commit hook repositories: `pre-commit autoupdate --freeze` (commit SHAs, with the tag in a `# frozen:` comment).

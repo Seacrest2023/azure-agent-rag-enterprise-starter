@@ -43,7 +43,7 @@ One table per group, in the inventory's order.
 
 ### Claude Code hook
 
-The guard runs on the owner's computer, in Claude Code and Copilot Chat (check 68). It leaves no record on GitHub, depends on the terminal's settings, and six checks end in the owner's answer, so every row is Partial. The evidence is its 170 tests, run by selftest on every pull request (check 23), and the proofs in `.claude/security-stack.json`.
+The guard runs on the owner's computer, in Claude Code and Copilot Chat (check 68). It leaves no record on GitHub, depends on the terminal's settings, and six checks end in the owner's answer, so every row is Partial. The evidence is its 175 tests, run by selftest on every pull request (check 23), and the proofs in `.claude/security-stack.json`.
 
 | Check | What it evidences | SOC 2 | ISO | NIST | Status | Where the evidence lives |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -84,7 +84,7 @@ The five required jobs run from main's copy of `security-gate.yml`, with tools i
 | --- | --- | --- | --- | --- | --- | --- |
 | 21 Secret scan of the PR | No secret reaches main, hooks skipped or not | CC6.1 | 5.17, 8.12, 8.29 | PR | Full | secret-scan logs |
 | 22 Commit checks replayed | The commit checks cannot be skipped | CC8.1 | 8.29, 8.32 | PR | Full | precommit logs |
-| 23 Tests of the gate and the guard | The controls are themselves tested on every change (283 tests) | CC4.x, CC8.1 | 8.29, 8.32 | PR | Full | selftest logs |
+| 23 Tests of the gate and the guard | The controls are themselves tested on every change (288 tests) | CC4.x, CC8.1 | 8.29, 8.32 | PR | Full | selftest logs |
 | 24 Gate: no new suppressions | Green cannot be reached by silencing a check | CC8.1 | 8.28, 8.29 | PR | Full | gate logs |
 | 25 Gate: no blocked names | Listed names cannot reach main by any route | CC8.1 | 8.12 | PR | Full | gate logs |
 | 26 Gate: risky workflow settings | Changed workflows are scanned for unsafe settings | CC8.1 | 8.9, 8.27 | PR | Full | gate logs |
@@ -121,7 +121,7 @@ Platform-enforced. The evidence is the settings themselves, read back with the i
 | 50 Extra approval for unattributed changes | Every merged commit is linked to a GitHub account | CC8.1 | 5.16, 8.32 | PR | Full | the ruleset |
 | 51 No deletion or force push | Main's history is the record of what passed | CC8.1 | 8.15, 8.32 | PR | Full | the ruleset |
 | 52 No one bypasses the ruleset | The rules bind everyone, admins and owner included | CC6.3, CC8.1 | 5.3, 8.2, 8.32 | GV, PR | Full: bypass list empty | the ruleset; Lowered from the baseline |
-| 53 Enforcement files listed | The protected files are defined (21 entries) | CC8.1 | 8.9, 8.32 | PR | Partial: holds through checks 3, 5, 49 and 68 | `.github/CODEOWNERS` |
+| 53 Enforcement files listed | The protected files are defined (27 entries) | CC8.1 | 8.9, 8.32 | PR | Partial: holds through checks 3, 5, 49 and 68 | `.github/CODEOWNERS` |
 | 54 Read-only workflow token; Actions can't approve PRs | CI runs with least privilege and cannot approve a change | CC6.3 | 8.2, 8.3 | PR | Full | Actions permissions readback |
 | 55 Actions pinned to a full commit SHA | An action's code cannot be swapped by moving a tag | CC6.8, CC9.2 | 5.19 to 5.22, 8.19 | PR | Full | Actions permissions readback; the workflows |
 | 56 Dependabot alerts; 57 Dependabot security updates | Vulnerable dependencies are flagged and a fix PR opened | CC7.1 | 8.8 | ID, PR | Partial: warns | repository settings; Dependabot PR history |

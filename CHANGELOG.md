@@ -2,7 +2,19 @@
 
 What changed in the baseline, newest first. Versions are tagged `vMAJOR.MINOR.PATCH`.
 
-## v0.1.0: the first public release
+## v0.1.1 (29 September 2026)
+
+### Changed
+
+- The instructions agents are handed are enforcement files: the Claude Code skills (`.claude/skills/`), the setup prompt and the prompt templates (`docs/prompts/`). So are the audit records: the checks inventory, the control mapping and the AI risk mapping.
+- `pyproject.toml` states the license, MIT.
+- The blocked-names check says how to keep a name private in a public repository: its list is public and unsalted, so such a name can go in a local list outside the repository (`BLOCKED_TERMS_FILE`), a check the owner keeps rather than enforcement.
+
+### Fixed
+
+- A wrapper's option value was taken for the program: `sudo -u root git push upstream` checked `root`, not `git`. And `env -S 'git push upstream'`, which runs its string as a command, wasn't read as one. Both are now. A redirect after an az command (`az group list 2>&1`) was read as part of the command, and a bare `>` after a request (`curl … > out.json`) as an address, so both asked; neither does now. `2>&1` counted as a write to a file named `1`, so after a `cd` into a folder the guard can't read (`cd "$(git rev-parse --show-toplevel)"`) it asked; joining a stream now writes no file.
+
+## v0.1.0: the first public release (29 September 2026)
 
 ### Added
 

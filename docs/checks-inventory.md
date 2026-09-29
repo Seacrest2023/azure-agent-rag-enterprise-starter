@@ -216,7 +216,7 @@ The columns:
 - **What it stops:** listed names, such as company names or the project's name in paths, entering the repository in any case or spelling.
 - **Why it exists:** the stack is generic, and some names must never appear.
 - **Tested by:** `tests/gate/test_security_gate.py` (the shared script, through the gate's tests).
-- **How to adopt:** start the list fresh and add names with `python scripts/check_blocked_terms.py --add "<name>"` (Phase 1, step 4).
+- **How to adopt:** start the list fresh and add names with `python scripts/check_blocked_terms.py --add "<name>"` (Phase 1, step 4). In a public repository the list is public too, and its hashes aren't salted, so a short name can be recovered by hashing every word of its length. A name that mustn't become known can go in a list outside the repository, with `BLOCKED_TERMS_FILE` pointing the git hooks at it. That's a local check the owner keeps, not enforcement: the pull request gate checks only the repository's list, and the guard doesn't protect a file outside the repository, so keep that list where agents can't write.
 - **Lowering it:** remove an entry. The gate refuses a removed entry (check 28), so it needs the owner's temporary bypass. The project gives up blocking that name.
 
 ### 17. Blocked names in the commit message
@@ -271,7 +271,7 @@ The columns:
 - **What it does:** runs `tests/gate` and `tests/hooks` with the default branch's copy first, then the PR's, against the PR's code. `tests/gate` runs the gate against a fake GitHub API with known-good and known-bad PRs, and tests the commit-message and file-length hooks. `tests/hooks` runs the guard on commands it must block, allow, ask about or refuse. `tests/access` is reserved in CODEOWNERS and has no tests yet.
 - **What it stops:** a PR that weakens the gate or the guard together with the tests that would catch it.
 - **Why it exists:** a tested behaviour can be extended, not silently changed (setup prompt, decision 5).
-- **Tested by:** it is the tests: 113 in `tests/gate` (98 for the gate, 10 for the GitHub settings script, 5 for the secret-scan step), 170 in `tests/hooks` (commands under [How to recount](#how-to-recount)).
+- **Tested by:** it is the tests: 113 in `tests/gate` (98 for the gate, 10 for the GitHub settings script, 5 for the secret-scan step), 175 in `tests/hooks` (commands under [How to recount](#how-to-recount)).
 - **How to adopt:** comes with `security-gate.yml` and `tests/` (Phase 1); run locally in Phase 2, step 1.
 - **Lowering it:** remove the job or a test. The gate refuses a removed required check name, or a removed test name in any of the four test files (check 28), so it needs the owner's temporary bypass. The project gives up the proof that the gate and the guard still work.
 
@@ -539,7 +539,7 @@ The columns:
 - **Lowering it:** add a bypass actor (the guard asks). The owner does this only temporarily, to merge a lowering the gate refuses by design ([Lowering a protection](#lowering-a-protection)). The project gives up rules that bind everyone.
 
 ### 53. Enforcement files listed
-- **What it does:** `.github/CODEOWNERS` lists the enforcement files: the hooks, the guard, the gates and what they read, their tests, the access tests, the files that decide how tests run, the agent rules files (`AGENTS.md`, and `CLAUDE.md`, which imports it), and VS Code's workspace settings and tasks (`.vscode/` and workspace files). The guard reads it (checks 3 and 68), and so does GitHub's code-owner review (check 49). It has 21 entries.
+- **What it does:** `.github/CODEOWNERS` lists the enforcement files: the hooks, the guard, the gates and what they read, their tests, the access tests, the files that decide how tests run, the agent rules files (`AGENTS.md`, and `CLAUDE.md`, which imports it), the instructions agents are handed (the Claude Code skills in `.claude/skills/`, the setup prompt and the prompt templates in `docs/prompts/`), the audit records (this inventory, the control mapping and the AI risk mapping), and VS Code's workspace settings and tasks (`.vscode/` and workspace files). The guard reads it (checks 3 and 68), and so does GitHub's code-owner review (check 49). It has 27 entries.
 - **What it stops:** enforcement files changing without the owner.
 - **Why it exists:** it defines what the one rule protects.
 - **Tested by:** `tests/hooks/test_block_hook_bypass.py` (`OwnerApproval`).
@@ -788,10 +788,10 @@ In the repository:
 - Gate tests, **98**: `grep -cE '^\s*def test_' tests/gate/test_security_gate.py`
 - GitHub settings script tests, **10**: `grep -cE '^\s*def test_' tests/gate/test_github_settings.py`
 - Secret-scan step tests, **5**: `grep -cE '^\s*def test_' tests/gate/test_secret_scan_step.py`
-- Guard tests, **170**: `grep -cE '^\s*def test_' tests/hooks/test_block_hook_bypass.py`
+- Guard tests, **175**: `grep -cE '^\s*def test_' tests/hooks/test_block_hook_bypass.py`
 - Permission deny rules, **8**: `jq '.permissions.deny | length' .claude/settings.json`
 - Hosts on the network allowlist, **8**: `jq '.network.allowed_hosts | length' .claude/security-stack.json`
-- CODEOWNERS entries, **21**: `grep -cvE '^\s*(#|$)' .github/CODEOWNERS`
+- CODEOWNERS entries, **27**: `grep -cvE '^\s*(#|$)' .github/CODEOWNERS`
 - Blocked names, **0**, of them in paths only **0**: `grep -cvE '^\s*(#|$)' .github/blocked-terms.txt` and `grep -cE ' paths$' .github/blocked-terms.txt`
 - Packages in the hash-pinned tool lists, **2, 10 and 7** (gate tools, pre-commit, secret scan): `for f in .github/requirements/*.txt; do printf '%s ' "$f"; grep -cE '^[A-Za-z0-9]' "$f"; done`
 - Action references, **21**, all pinned to a commit SHA: `grep -hoE 'uses: [^ ]+' .github/workflows/*.yml | wc -l` and `grep -hoE 'uses: [^@ ]+@[0-9a-f]{40}' .github/workflows/*.yml | wc -l`

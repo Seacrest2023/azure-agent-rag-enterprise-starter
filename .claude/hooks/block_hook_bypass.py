@@ -114,6 +114,9 @@ REDIRECT_WORD = re.compile(r"^(?:\d+|\{\w+\}|\*)?(?:>>?|<<<|<>|<(?!<))(.*)$", re
 # &>out and &>>out as >out and >>out, 2>&1 as 2>1, >&2 as >2, <&0 as <0, and >|out as >out.
 AMP_BEFORE_REDIRECT = re.compile(r"(?<![&|])&(?=>)")
 AMP_IN_REDIRECT = re.compile(r"(?<=[<>])&")
+# 2>&1, >&2, <&0 and >&- join or close a stream: no file. They're read as /dev/fd/N, a path that's never an
+# enforcement file, so a relative "1" can't land in a folder the guard takes to be protected. >&file writes file.
+FD_DUP = re.compile(r"(?<=[<>])&(?=(?:\d+|-)(?![\w./\\-]))")
 PIPE_IN_REDIRECT = re.compile(r"(?<=>)\|")
 # A < or > written against the word before it: git log>out.
 ATTACHED_REDIRECT = re.compile(r"(?<=[^\s;&|()<>])[<>]")
@@ -141,6 +144,17 @@ MAX_NESTING = 5
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1([^\n]*)\n(.*?)^\s*\2\s*$", re.DOTALL | re.MULTILINE)
 SEPARATORS = {";", "&&", "||", "|", "&", "\n", "(", ")", "{", "}"}
 WRAPPERS = {"env", "command", "exec", "time", "nohup", "sudo", "xargs"}
+# A wrapper's options that take the next word as their value: in sudo -u root git push, root isn't the program.
+WRAPPER_VALUE_OPTIONS = {
+    "sudo": {"-u", "--user", "-g", "--group", "-C", "--close-from", "-D", "--chdir", "-h", "--host", "-p",
+             "--prompt", "-R", "--chroot", "-r", "--role", "-t", "--type", "-T", "--command-timeout", "-U",
+             "--other-user"},
+    "env": {"-u", "--unset", "-C", "--chdir"},
+    "time": {"-f", "--format", "-o", "--output"},
+    "xargs": {"-a", "--arg-file", "-d", "--delimiter", "-E", "-I", "-L", "--max-lines", "-n", "--max-args", "-P",
+              "--max-procs", "-s", "--max-chars"},
+    "exec": {"-a"},
+}
 GIT_GLOBAL_WITH_VALUE = {"-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env"}
 # An alias body that skips hooks, or a shell alias ("!...") that could run anything.
 ALIAS_BYPASS = re.compile(r"^!|--no-verify|\bcommit\b.*(^|\s)-[A-Za-z]*n")
@@ -640,9 +654,13 @@ def web_request_parts(tokens, name):
     while i < len(args):
         tok, i = args[i], i + 1
         if not tok.startswith("-") or tok == "-":
+            # 2>/dev/null, >out.json and > out.json say where output goes, not where the request goes. A quoted '>'
+            # never reaches here as a word of its own (detach_redirects makes it ' >'), so it can't hide a URL.
             redirect = REDIRECT_WORD.match(tok)
-            if not (redirect and redirect.group(1)):  # 2>/dev/null, >out.json, 2>&1: where output goes, not a URL
-                urls.append(tok)  # a bare > still counts, as an address the guard can't read
+            if not redirect:
+                urls.append(tok)
+            elif not redirect.group(1):
+                i += 1  # a bare > takes the next word as its target
             continue
         if name in POWERSHELL_WEB:  # parameters: case-insensitive, may be shortened, -Name:value or -Name value
             found = re.match(r"^-(\w+)(?:[:=](.*))?$", tok)
@@ -1308,6 +1326,10 @@ def az_path(args):
     path, unknown, i = [], False, 0
     while i < len(args):
         tok = args[i]
+        redirect = REDIRECT_WORD.match(tok)
+        if redirect:  # az group list 2>&1: where the output goes isn't part of the command
+            i += 1 if redirect.group(1) else 2
+            continue
         if not tok.startswith("-"):
             path.append(tok.lower())
             i += 1
@@ -1374,7 +1396,7 @@ def segments(command, tool="Bash"):
     &>out, >|out) doesn't split a command: the words after it are still its words. A
     substitution is a value the guard can't read (mask_substitutions)."""
     text = LINE_CONTINUATION.sub(r"\1", mask_substitutions(strip_heredocs(command), tool))
-    text = PIPE_IN_REDIRECT.sub("", AMP_IN_REDIRECT.sub("", AMP_BEFORE_REDIRECT.sub(" ", text)))
+    text = PIPE_IN_REDIRECT.sub("", AMP_IN_REDIRECT.sub("", FD_DUP.sub("/dev/fd/", AMP_BEFORE_REDIRECT.sub(" ", text))))
     lexer = shlex.shlex(detach_redirects(text), posix=True, punctuation_chars=";&|()\n")
     lexer.whitespace_split = True
     lexer.whitespace = lexer.whitespace.replace("\n", "")  # a new line separates commands, like ;
@@ -1514,12 +1536,35 @@ def strip_prefix(tokens):
                     SHELL_VARS[arg.split("=", 1)[0]] = expand_vars(arg.split("=", 1)[1])
             return moved + split_redirects(tokens[i + 1:])[1]  # no program runs, but its redirects still write
         elif tok.rsplit("/", 1)[-1] in WRAPPERS:
-            i += 1
-            while i < len(tokens) and tokens[i].startswith("-"):
-                i += 1
+            wrapper, i, needs = tok.rsplit("/", 1)[-1], i + 1, None  # needs: what the next word is for
+            while i < len(tokens):
+                redirect = REDIRECT_WORD.match(tokens[i])
+                if redirect:  # the shell takes redirects out first: sudo 2>x -u root git, env -u 2>x HOME git
+                    width = 1 if redirect.group(1) else 2
+                    moved, i = moved + tokens[i:i + width], i + width
+                elif needs == "split":  # env -S 'git push x' runs git push x, and its words can be options too
+                    tokens, needs = tokens[:i] + env_words(tokens[i]) + tokens[i + 1:], None
+                elif needs == "value":  # sudo -u root git push: root is -u's value, not the program
+                    i, needs = i + 1, None
+                elif not tokens[i].startswith("-"):
+                    break
+                elif wrapper == "env" and tokens[i].partition("=")[0] in ("-S", "--split-string"):
+                    _, eq, inline = tokens[i].partition("=")
+                    words = env_words(inline) if eq else []  # --split-string=... carries it; -S takes the next word
+                    tokens, needs = tokens[:i] + words + tokens[i + 1:], None if eq else "split"
+                else:
+                    i, needs = i + 1, "value" if tokens[i] in WRAPPER_VALUE_OPTIONS.get(wrapper, ()) else None
         else:
             break
     return tokens[i:] + moved
+
+
+def env_words(text):
+    """The words env -S makes of its string: \\_ separates words too. An escape, ${VAR} or a comment in it asks
+    the owner: env's own grammar there isn't the shell's, and the guard doesn't read it."""
+    if re.search(r"\\(?!_)|\$|(^|\s)#", text):
+        owner_needed("env -S with an escape, a variable or a comment, which the guard can't read")
+    return shlex.split(text.replace("\\_", " "))
 
 
 def split_redirects(words):

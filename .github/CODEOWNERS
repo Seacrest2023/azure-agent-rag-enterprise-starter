@@ -1,9 +1,12 @@
 # Replace @OWNER with the owner's GitHub handle (setup prompt, Phase 1, step 3).
 # The enforcement files: the hooks, the agent guard, the gates and what they
 # read, their tests, the access tests, the files that decide how tests run, the
-# agent rules files (AGENTS.md, and CLAUDE.md, which imports it), and VS Code's
-# workspace settings and tasks (.vscode/ and workspace files), which can switch
-# Copilot Chat's hooks off or run commands the guard doesn't see.
+# agent rules files (AGENTS.md, and CLAUDE.md, which imports it), the
+# instructions agents are handed (the Claude Code skills, the setup prompt and
+# the prompt templates), the audit records (the checks inventory, the control
+# mapping and the AI risk mapping), and VS Code's workspace settings and tasks
+# (.vscode/ and workspace files), which can switch Copilot Chat's hooks off or
+# run commands the guard doesn't see.
 # The app's other tests aren't listed, so everyday work needs no approval.
 # The one rule: agents change these only with the owner's approval.
 # The agent guard (.claude/hooks/) asks the owner before an agent changes them,
@@ -31,3 +34,9 @@
 /.pytest.ini                 @OWNER
 /AGENTS.md                   @OWNER
 /CLAUDE.md                   @OWNER
+/.claude/skills/             @OWNER
+/docs/prompts/               @OWNER
+/docs/security-setup-prompt.md @OWNER
+/docs/checks-inventory.md    @OWNER
+/docs/control-mapping.md     @OWNER
+/docs/ai-risk-mapping.md     @OWNER

@@ -440,7 +440,7 @@ class OwnerApproval(unittest.TestCase):
                                  "{ thread { isResolved } } }'"}),
             ("Bash", {"command": "python -c \"import json; print(json.load(open('.claude/settings.json')))\""}),
             ("Bash", {"command": "t=/tmp/out.txt; echo x > \"$t\""}),
-            ("Bash", {"command": "for f in docs/*.md; do sed -i s/a/b/ \"$f\"; done"}),
+            ("Bash", {"command": "for f in docs/use-cases/*.md; do sed -i s/a/b/ \"$f\"; done"}),
             ("Bash", {"command": "find /tmp/scratch -name '*.log' -delete"}),
             ("Bash", {"command": "cd docs && cd - && ls"}),
             ("PowerShell", {"command": "Get-Content .claude\\settings.json"}),
@@ -449,7 +449,7 @@ class OwnerApproval(unittest.TestCase):
             ("PowerShell", {"command": "[Environment]::SetEnvironmentVariable('Path', 'C:\\Tools\\Python\\Scripts', 'User')"}),
             # Code that writes elsewhere may mention folders that are only partly owned.
             ("Bash", {"command": "python - <<'EOF'\nimport json\njson.dump({'dir': 'tests/events'}, open('/tmp/out.json', 'w'))\nEOF"}),
-            ("Bash", {"command": "python -c \"open('.claude/skills/x/SKILL.md', 'w').write('x')\""}),
+            ("Bash", {"command": "python -c \"open('.claude/notes/x.md', 'w').write('x')\""}),
             ("mcp__github__create_or_update_file", {"path": "docs/a.md", "content": "x"}),
             ("mcp__github__get_file_contents", {"path": ".github/workflows/x.yml"}),
             ("mcp__github__create_branch", {"owner": "o", "repo": "r", "branch": "topic"}),
@@ -464,6 +464,15 @@ class OwnerApproval(unittest.TestCase):
                 self.assertNeedsOwner("Edit", file_path=repo_path(name), old_string="a", new_string="b")
                 self.assertNeedsOwner("Write", file_path=repo_path(name), content="x")
                 self.assertNeedsOwner("Bash", command=f"echo x > {name}")
+
+    def test_agent_instructions_and_audit_records(self):
+        # What agents are handed as instructions, and the records an audit reads, change only with the owner.
+        for parts in ((".claude", "skills", "testing", "SKILL.md"), ("docs", "prompts", "port-the-guard.md"),
+                      ("docs", "security-setup-prompt.md"), ("docs", "checks-inventory.md"),
+                      ("docs", "control-mapping.md"), ("docs", "ai-risk-mapping.md")):
+            with self.subTest(path="/".join(parts)):
+                self.assertNeedsOwner("Edit", file_path=repo_path(*parts), old_string="a", new_string="b")
+        self.assertNeedsOwner("Bash", command="python -c \"open('.claude/skills/x/SKILL.md', 'w').write('x')\"")
 
     def test_unreadable_codeowners_makes_every_change_need_owner(self):
         with tempfile.TemporaryDirectory() as root:
@@ -702,6 +711,12 @@ class AzureCommands(unittest.TestCase):
             with open(os.path.join(root, ".claude", "security-stack.json"), "w", encoding="utf-8") as fh:
                 fh.write(stack_text)
         return root
+
+    def test_a_redirect_isnt_part_of_the_az_command(self):
+        for command in ("az group list 2>&1", "2>/dev/null az group list", "az group list > groups.json"):
+            with self.subTest(command=command):
+                self.assertEqual(decision(self.run_az(command)), "allow")
+        self.assertEqual(decision(self.run_az("az group delete -n x 2>&1")), "deny")
 
     def test_reads_in_the_project_tenant_pass(self):
         for command in ["az group list -o table", "az role assignment list --assignee x --all",
@@ -1037,9 +1052,43 @@ class Redirects(unittest.TestCase):
                                  ">/dev/null git status", "2>/dev/null git log -1", "npm test 2>&1 | tail -3",
                                  "ls &>/dev/null", "cp a b 2>/dev/null", "pushd docs >/dev/null && ls && popd >/dev/null",
                                  "curl -s https://api.github.com/x 2>/dev/null", "curl -s https://api.github.com/x >out.json",
-                                 "wget -q https://pypi.org/x 2>&1", "echo done >&2", "git diff > changes.patch"])
+                                 "wget -q https://pypi.org/x 2>&1", "echo done >&2", "git diff > changes.patch",
+                                 "curl -s https://api.github.com/x > out.json"])
+        self.assertAll("ask", ["curl https://api.github.com/x > out.json https://example.com/x"])
+
+    def test_joining_a_stream_writes_no_file(self):  # 2>&1 isn't a file named 1, even in a folder taken as protected
+        self.assertAll("allow", ['cd "$(git rev-parse --show-toplevel)" && npm test 2>&1', "cd - && ls 2>&1 >&2 <&0",
+                                 "cd - && ls 2>&-"])
+        self.assertAll("ask", ["cd - && ls >&notes.txt"])
         self.assertAll("allow", ["git status 2>$null", "Copy-Item a b *>$null", "Get-ChildItem docs 2>&1"],
                        tool="PowerShell")
+
+
+class Wrappers(unittest.TestCase):
+    """A wrapper (sudo, env, time, xargs, exec) runs the command after its own options, whatever values they take."""
+
+    def assertAll(self, expected, cases):
+        for case in cases:
+            with self.subTest(case=case):
+                result = guard("Bash", mode="default", command=case)
+                self.assertEqual(decision(result), expected, result.stderr)
+
+    def test_an_options_value_isnt_the_program(self):
+        self.assertAll("ask", ["sudo -u root git push upstream", "sudo -g wheel -u root git push upstream",
+                               "env -u HOME git push upstream", "env -C /tmp git push upstream",
+                               "time -o t.log git push upstream", "exec -a name git push upstream",
+                               "xargs -n 1 git push upstream", "env -u 2>/dev/null HOME git push upstream",
+                               "sudo 2>/dev/null -u root git push upstream", "sudo -u > out root git push upstream"])
+        self.assertAll("deny", ["sudo -u root git commit --no-verify -m x"])
+        self.assertAll("allow", ["sudo -u root ls", "env -u HOME git status", "time -o t.log npm test"])
+
+    def test_env_runs_its_split_string(self):
+        self.assertAll("ask", ["env -S 'git push upstream'", "env --split-string='git push upstream'",
+                               "env -S '-u HOME git push upstream'", "env -S 'git\\_push\\_upstream'",
+                               "env -S 2>/dev/null 'git push upstream'", "env -S 'git status ${X}'",
+                               "env -S 'git status \\t'"])
+        self.assertAll("deny", ["env -S 'git commit --no-verify -m x'"])
+        self.assertAll("allow", ["env -S 'git status'"])
 
 
 class CommandsOnSeveralLines(unittest.TestCase):
