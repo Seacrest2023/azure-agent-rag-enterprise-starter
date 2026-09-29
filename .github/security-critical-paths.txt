@@ -1,0 +1,38 @@
+# Security-critical paths. The gate (scripts/security_gate.sh) reports changes
+# to them, and lists those with no dedicated automated check yet; later phases
+# add each area's tests to the gate. Patterns can be added, never removed.
+# The gate reads this file from the default branch, so edits here take effect
+# only after they merge; a PR can't loosen the list for itself.
+# One extended regex per line, matched against the repo-relative path.
+# Paths that don't exist yet are listed so the gate is in place before the code is.
+
+# Access model: row-level security, masking, grants, roles
+(^|/)[^/]*(rls|row[-_]level|security[-_]polic|masking|grant|role|permission)[^/]*$
+^db/security/
+
+# Enforcement layer and the agent's identity and tools
+^enforcement/
+^agent/(tools|identity|auth)/
+
+# Infrastructure and CI
+^infra/
+\.(bicep|tf)$
+^\.github/
+
+# The design the access model is built from
+^docs/architecture\.md$
+
+# Agent instructions: weakening these weakens every future setup run
+^\.claude/
+^\.vscode/
+\.code-workspace$
+^docs/security-setup-prompt\.md$
+
+# Secret-scan allowlist: adding an entry here hides a finding from CI
+^\.secrets\.baseline$
+^\.pre-commit-config\.yaml$
+^\.gitignore$
+
+# Security tooling and its tests
+^scripts/
+^tests/

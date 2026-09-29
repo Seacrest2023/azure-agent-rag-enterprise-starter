@@ -1,0 +1,9 @@
+{
+  // The editor shows the same findings as the checks: Pylance reads [tool.pyright]
+  // and Ruff reads [tool.ruff] in pyproject.toml.
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff"
+  ]
+}

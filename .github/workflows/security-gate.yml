@@ -1,0 +1,312 @@
+name: security-gate
+
+# The required checks, defined where a pull request can't change them:
+#   security-critical-gate  automated checks on the PR (scripts/security_gate.sh)
+#   secret-scan             the files the PR adds or changes, scanned for secrets
+#   precommit               the pre-commit chain, re-run on the PR's files
+#   selftest                tests of the gate and the agent guard
+#   python                  the app's lint, format, types, tests and audits
+#                           (scripts/check_python.sh)
+# No manual step: if these pass, the PR can be merged.
+#
+# pull_request_target always runs this file, and checks out code, from the
+# repository's default branch, whatever the PR's base (for PRs to main, that is
+# their base). Every job installs its tools from the default branch before any
+# of the PR's files are on disk: from its hash-pinned lists
+# (.github/requirements/), or for python, from its hash-pinned uv.lock. The gate
+# refuses PRs that would weaken this file itself (scripts/workflow_checks.py).
+# To test a change to this file before it merges, see scripts/staging_workflow.py.
+#
+# security-critical-gate never runs PR code: it reads PR files through the API.
+# secret-scan only reads the PR's files. precommit, selftest and python must run
+# PR code (its hooks, its scripts, its tests). Those four check the PR out without
+# credentials (persist-credentials: false), with a read-only token that is
+# never passed to PR code, in a repository that holds no secrets. That's
+# acceptable for a private repository, where only collaborators, who can
+# already read everything, open PRs. For a public repository, run precommit and
+# selftest on pull_request instead and accept that a PR controls their steps.
+on: # zizmor: ignore[dangerous-triggers] -- deliberate; see the note above
+  pull_request_target:
+    # edited covers retargeting to another base. The jobs always run on it:
+    # a skipped required check would count as passed.
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+concurrency:
+  group: security-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  security-critical-gate:
+    name: security-critical-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      # The default ref under pull_request_target is the default branch.
+      - name: Check out the default branch's gate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/security-critical-paths.txt
+            .github/blocked-terms.txt
+            .github/requirements/gate-tools.txt
+            .claude/security-stack.json
+            scripts/
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the gate's tools (hash-pinned)
+        run: |
+          pip install --no-deps --only-binary :all: --require-hashes -r .github/requirements/gate-tools.txt
+
+      - name: Check the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
+          COMMIT_COUNT: ${{ github.event.pull_request.commits }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: bash scripts/security_gate.sh
+
+  # The files the PR adds or changes, scanned against the PR's baseline: a new
+  # secret can only arrive in them. Every tracked file is scanned on the default
+  # branch after each merge and daily (security.yml). The gate fails any PR that
+  # loosens the baseline (scripts/baseline_checks.py).
+  secret-scan:
+    name: secret-scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the default branch's tool list
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: base
+          persist-credentials: false
+          sparse-checkout: .github/requirements/secret-scan.txt
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install detect-secrets (hash-pinned)
+        run: |
+          pip install --no-deps --only-binary :all: --require-hashes -r base/.github/requirements/secret-scan.txt
+
+      # refs/pull/N/head exists in this repository for every PR, forks included.
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan the files the pull request adds or changes against the baseline
+        working-directory: pr
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA" || { echo "::error::Checked out $(git rev-parse HEAD), expected $HEAD_SHA; refusing to pass."; exit 1; }
+          git cat-file -e "$BASE_SHA^{commit}" 2> /dev/null || { echo "::error::The base commit $BASE_SHA isn't in the checkout; refusing to pass."; exit 1; }
+          # Deleted files are left out; renamed and copied ones are scanned at their new path.
+          # "--" ends the options, so a file named like one (--help) is scanned, not obeyed.
+          git diff --name-only -z --diff-filter=d "$BASE_SHA...HEAD" \
+            | { grep -zv '^\.secrets\.baseline$' || true; } \
+            | xargs -0 --no-run-if-empty detect-secrets-hook --baseline .secrets.baseline --
+
+  # Re-runs the whole pre-commit chain on the PR's files, so a hook skipped
+  # locally (--no-verify, SKIP=, hooks never installed) can't get a change onto
+  # main. Runs the base branch's config as well as the PR's, so a PR that drops
+  # a hook still gets that hook's check.
+  precommit:
+    name: precommit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the default branch's tool list
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: base
+          persist-credentials: false
+          sparse-checkout: .github/requirements/pre-commit.txt
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # The hooks pre-commit then installs are pinned by commit SHA in .pre-commit-config.yaml.
+      - name: Install pre-commit (hash-pinned)
+        run: |
+          pip install --no-deps --only-binary :all: --require-hashes -r base/.github/requirements/pre-commit.txt
+
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run the pre-commit chain
+        working-directory: pr
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::Checked out $(git rev-parse HEAD), expected $HEAD_SHA; refusing to pass."
+            exit 1
+          fi
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2> /dev/null; then
+            echo "::error::The base commit $BASE_SHA isn't in the checkout; refusing to pass."
+            exit 1
+          fi
+          if git cat-file -e "$BASE_SHA:.pre-commit-config.yaml" 2> /dev/null; then
+            git show "$BASE_SHA:.pre-commit-config.yaml" > "$RUNNER_TEMP/base-pre-commit-config.yaml"
+            echo "::group::Base branch hooks"
+            pre-commit run --config "$RUNNER_TEMP/base-pre-commit-config.yaml" \
+              --from-ref "$BASE_SHA" --to-ref HEAD --show-diff-on-failure
+            echo "::endgroup::"
+          fi
+          echo "::group::This PR's hooks"
+          pre-commit run --from-ref "$BASE_SHA" --to-ref HEAD --show-diff-on-failure
+          echo "::endgroup::"
+
+  # Tests for the security tooling. Runs the default branch's tests on the PR's
+  # code first, before any PR code has run (so it can't have tampered with
+  # them), then the PR's own tests. A PR therefore can't weaken the gate or the
+  # guard and their tests together. (The gate also refuses PRs that delete test
+  # cases.) Changing a tested behaviour takes the new behaviour in one PR and
+  # the test update in a later one, or keeps the old contract.
+  selftest:
+    name: selftest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: base
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the test tools (hash-pinned)
+        run: |
+          pip install --no-deps --only-binary :all: --require-hashes -r base/.github/requirements/gate-tools.txt
+
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
+          persist-credentials: false
+
+      - name: The default branch's tests against the PR's code (first)
+        working-directory: base
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REQUIRE_ZIZMOR: "1"
+          SECURITY_CODE_ROOT: ${{ github.workspace }}/pr
+        run: |
+          set -euo pipefail
+          test "$(git -C ../pr rev-parse HEAD)" = "$HEAD_SHA" || { echo "::error::Checked out $(git -C ../pr rev-parse HEAD), expected $HEAD_SHA; refusing to pass."; exit 1; }
+          # Only the gate's and the guard's tests. The app's own tests change with its
+          # behaviour, so running the default branch's copy against a PR would fail it.
+          for suite in tests/gate tests/hooks; do
+            if [ -d "$suite" ]; then
+              python -m unittest discover -s "$suite" -t . -v
+            else
+              echo "The default branch has no $suite yet."
+            fi
+          done
+
+      - name: The PR's tests against the PR's code
+        working-directory: pr
+        env:
+          REQUIRE_ZIZMOR: "1"
+        run: |
+          set -euo pipefail
+          for suite in tests/gate tests/hooks; do
+            python -m unittest discover -s "$suite" -t . -v
+          done
+
+  python:
+    name: python
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: base
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: base/.python-version
+
+      - name: Install uv (checksum-verified)
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.17"
+          enable-cache: false
+
+      - name: Check out the pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+          path: pr
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The PR's app dependencies go in first, then the default branch's tools over
+      # them, so a dependency named like a tool can't replace one. uv isn't Python,
+      # so nothing from the PR runs during either install.
+      - name: Install the PR's app dependencies, then the default branch's tools, hash-pinned
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C pr rev-parse HEAD)" = "$HEAD_SHA" || { echo "::error::Checked out $(git -C pr rev-parse HEAD), expected $HEAD_SHA; refusing to pass."; exit 1; }
+          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python)"
+          (cd pr && uv export --locked --no-dev --no-emit-project --quiet) > "$RUNNER_TEMP/app.txt"
+          (cd base && uv export --frozen --only-group dev --no-emit-project --quiet) > "$RUNNER_TEMP/tools.txt"
+          uv pip install --python "$RUNNER_TEMP/venv" --require-hashes --no-build -r "$RUNNER_TEMP/app.txt"
+          uv pip install --python "$RUNNER_TEMP/venv" --require-hashes --no-build -r "$RUNNER_TEMP/tools.txt"
+
+      - name: The default branch's Python checks against the PR's code
+        working-directory: pr
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          source "$RUNNER_TEMP/venv/bin/activate"
+          bash ../base/scripts/check_python.sh "$BASE_SHA"

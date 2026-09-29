@@ -1,0 +1,76 @@
+name: security
+
+# Scans main after every merge and daily, so a newly detectable secret pattern
+# is caught without a code change. Pull requests are scanned by the required
+# secret-scan job in security-gate.yml, which a PR can't edit; this job has a
+# different name so it never stands in for that check.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+
+# Declaring permissions replaces the default token scopes; nothing here needs write access.
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan-main:
+    name: secret-scan-main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install detect-secrets (hash-pinned)
+        run: |
+          pip install --no-deps --only-binary :all: --require-hashes -r .github/requirements/secret-scan.txt
+
+      # Scans every tracked file. Pull requests scan only the files they add or
+      # change (security-gate.yml); this full scan covers the rest, such as
+      # files a newer detect-secrets release would flag. "--" ends the options, so a
+      # file named like one (--help) is scanned, not obeyed.
+      - name: Scan tracked files against the baseline
+        run: |
+          git ls-files -z | grep -zv '^\.secrets\.baseline$' \
+            | xargs -0 detect-secrets-hook --baseline .secrets.baseline --
+
+  # New vulnerabilities are published every day, so main's Python packages are
+  # audited daily too, not only when a pull request changes them.
+  dependency-audit-main:
+    name: dependency-audit-main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+
+      - name: Install uv (checksum-verified)
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.17"
+          enable-cache: false
+
+      - name: Audit every package in uv.lock for known vulnerabilities
+        run: |
+          set -euo pipefail
+          uv venv "$RUNNER_TEMP/venv" --python "$(command -v python)"
+          uv export --frozen --only-group dev --no-emit-project --quiet > "$RUNNER_TEMP/tools.txt"
+          uv pip install --python "$RUNNER_TEMP/venv" --require-hashes --no-build -r "$RUNNER_TEMP/tools.txt"
+          uv export --frozen --no-emit-project --quiet > "$RUNNER_TEMP/all.txt"
+          "$RUNNER_TEMP/venv/bin/pip-audit" -r "$RUNNER_TEMP/all.txt" --require-hashes --disable-pip --progress-spinner off

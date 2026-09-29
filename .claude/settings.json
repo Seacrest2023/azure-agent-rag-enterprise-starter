@@ -1,0 +1,73 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(~/.azure/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.docker/config.json)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_hook_bypass.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_hook_bypass.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell|Write|Edit|MultiEdit|NotebookEdit|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null || { echo 'Blocked: the hook guard needs Python 3.9 or later on PATH as python, and none was found.' >&2; exit 2; }"
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_hook_bypass.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null || { echo 'Blocked: the hook guard needs Python 3.9 or later on PATH as python, and none was found.' >&2; exit 2; }"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && if ! command -v pre-commit >/dev/null 2>&1; then echo 'pre-commit is not installed, so git hooks do not run in this clone. Tell the owner: pip install pre-commit, then start a new session.'; elif pre-commit install -t pre-commit -t commit-msg >/dev/null 2>&1; then echo 'Git hooks installed in this clone (pre-commit, commit-msg).'; else echo 'pre-commit install failed in this clone. Tell the owner to run it and read the error.'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

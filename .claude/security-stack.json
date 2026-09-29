@@ -1,0 +1,40 @@
+{
+  "$comment": "The only project-specific file in the security stack. Everything else (workflows, scripts, hooks, tests, docs/security-setup-prompt.md, the security-setup skill) is generic and reads these values. To reuse the stack, copy it and replace these values. Identifiers only: no secrets belong here.",
+  "github": {
+    "repository": "OWNER/REPOSITORY",
+    "default_branch": "main",
+    "deploy_environment": "dev",
+    "required_checks": [
+      "secret-scan",
+      "precommit",
+      "selftest",
+      "security-critical-gate",
+      "python"
+    ],
+    "required_checks_in_ruleset_now": [],
+    "merge_methods": [
+      "squash"
+    ]
+  },
+  "network": {
+    "$comment": "Hosts an agent may reach without asking the owner: web requests from the terminal, and web fetches. Anything else asks.",
+    "allowed_hosts": [
+      "github.com",
+      "api.github.com",
+      "docs.github.com",
+      "code.claude.com",
+      "docs.claude.com",
+      "learn.microsoft.com",
+      "pypi.org",
+      "files.pythonhosted.org"
+    ]
+  },
+  "status": {
+    "done_and_verified": [],
+    "open_agent": [
+      "Set up the stack: docs/security-setup-prompt.md, from Phase 0"
+    ],
+    "open_owner": [],
+    "enforcement_anchor": "undecided"
+  }
+}

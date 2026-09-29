@@ -1,0 +1,33 @@
+# Replace @OWNER with the owner's GitHub handle (setup prompt, Phase 1, step 3).
+# The enforcement files: the hooks, the agent guard, the gates and what they
+# read, their tests, the access tests, the files that decide how tests run, the
+# agent rules files (AGENTS.md, and CLAUDE.md, which imports it), and VS Code's
+# workspace settings and tasks (.vscode/ and workspace files), which can switch
+# Copilot Chat's hooks off or run commands the guard doesn't see.
+# The app's other tests aren't listed, so everyday work needs no approval.
+# The one rule: agents change these only with the owner's approval.
+# The agent guard (.claude/hooks/) asks the owner before an agent changes them,
+# or merges or approves a PR that does. On GitHub, the ruleset holds such a PR
+# for the owner's review when its author isn't a code owner (Dependabot, or an
+# agent with its own account). Everything else merges when the checks pass.
+/.claude/settings.json       @OWNER
+/.claude/settings.local.json @OWNER
+/.claude/security-stack.json @OWNER
+/.claude/hooks/              @OWNER
+/.pre-commit-config.yaml     @OWNER
+/.secrets.baseline           @OWNER
+/.github/                    @OWNER
+/.vscode/                    @OWNER
+*.code-workspace             @OWNER
+/scripts/                    @OWNER
+/tests/gate/                 @OWNER
+/tests/hooks/                @OWNER
+/tests/access/               @OWNER
+/tests/__init__.py           @OWNER
+/tests/conftest.py           @OWNER
+/conftest.py                 @OWNER
+/pyproject.toml              @OWNER
+/pytest.ini                  @OWNER
+/.pytest.ini                 @OWNER
+/AGENTS.md                   @OWNER
+/CLAUDE.md                   @OWNER

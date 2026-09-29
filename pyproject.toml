@@ -1,0 +1,92 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = "Agent-over-RAG baseline for Azure"
+license = "MIT"
+requires-python = "==3.12.*"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "basedpyright>=1.40.1",
+  "deptry>=0.25.1",
+  "diff-cover>=10.5.1",
+  "hypothesis>=6.168.0",
+  "pip-audit>=2.10.1",
+  "pytest>=9.1.1",
+  "pytest-cov>=7.1.0",
+  "pytest-randomly>=5.0.0",
+  "ruff>=0.16.8",
+  "vulture>=2.16",
+]
+
+[tool.uv]
+package = false
+# A cooldown: nothing uploaded in the last 7 days is resolved, so a hijacked
+# release has time to be caught before it reaches this project.
+exclude-newer = "7 days"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+# The security tooling has its own tests and owner review; these checks are for the app.
+# Code blocks in Markdown are illustrations, not app code.
+extend-exclude = [".claude", "scripts", "tests/gate", "tests/hooks", "*.md"]
+force-exclude = true
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "C90", "PLR", "TID", "PT", "S", "RUF"]
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "C901", "PLR0912", "PLR0913", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 12
+max-statements = 50
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"unittest.mock".msg = "Don't patch: hand the code a fake from tests/fakes through the composition root."
+
+# Pyright's settings, read by basedpyright in CI and by Pylance in the editor.
+[tool.pyright]
+pythonVersion = "3.12"
+include = ["src", "tests"]
+exclude = ["tests/gate", "tests/hooks", "**/__pycache__", "**/.*"]
+extraPaths = ["src"]
+typeCheckingMode = "standard"
+strict = ["src"]
+enableTypeIgnoreComments = false
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+# Every folder a pull request must run; end-to-end tests and evals run against Azure instead.
+# Folders that don't exist yet are skipped, so a new one is covered the moment it appears.
+testpaths = ["tests/unit", "tests/behaviour", "tests/events", "tests/integration", "tests/access"]
+pythonpath = ["src"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+# Replaces coverage's default list, so a no-cover comment excludes nothing.
+exclude_lines = ["if TYPE_CHECKING:", "@overload", "^\\s*\\.\\.\\.$"]
+
+[tool.deptry]
+known_first_party = ["app"]
+
+[tool.vulture]
+paths = ["src"]
+min_confidence = 60
+# Called from the Functions entry points, outside src.
+ignore_names = ["build_app"]

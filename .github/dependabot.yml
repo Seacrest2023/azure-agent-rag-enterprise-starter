@@ -1,0 +1,26 @@
+# Keeps the SHA-pinned actions in .github/workflows and the Python packages in
+# uv.lock current, proposing only versions released at least 7 days ago.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # No action version released in the last 7 days: a hijacked release is
+    # usually caught by then.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    # The same cooldown as uv.lock: no version uploaded in the last 7 days.
+    cooldown:
+      default-days: 7
+    groups:
+      python:
+        patterns: ["*"]

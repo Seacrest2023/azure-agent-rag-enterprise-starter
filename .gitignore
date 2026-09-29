@@ -1,0 +1,40 @@
+# Secrets and local configuration. Never commit real credentials;
+# copy .env.example to .env and fill it in locally.
+.env
+.env.*
+!.env.example
+*.env.local
+local.settings.json
+*.publishsettings
+*.pfx
+*.pem
+*.key
+.azure/
+
+# Terraform state and variable files can hold secrets
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+
+# Personal Claude Code settings (it can switch hooks off, so it's never shared)
+.claude/settings.local.json
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

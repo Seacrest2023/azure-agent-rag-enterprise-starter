@@ -1,0 +1,52 @@
+# Install once per clone:  pip install pre-commit && pre-commit install -t pre-commit -t commit-msg
+# (a SessionStart hook in .claude/settings.json runs the install for Claude Code sessions).
+# Hook repositories are pinned to commit SHAs (tags can move); update with
+# `pre-commit autoupdate --freeze`.
+# CI runs the same checks, so skipping a hook does not skip the check.
+repos:
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: 01886c8a910c64595c47f186ca1ffc0b77fa5458  # frozen: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: ^\.secrets\.baseline$
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # frozen: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+      - id: check-merge-conflict
+      - id: check-yaml
+
+  # Blocked names (.github/blocked-terms.txt) in each commit's files, paths and message.
+  - repo: local
+    hooks:
+      - id: blocked-names
+        name: blocked names in files and paths
+        entry: python scripts/check_blocked_terms.py
+        language: python
+        stages: [pre-commit]
+      - id: blocked-names-message
+        name: blocked names in the commit message
+        entry: python scripts/check_blocked_terms.py --message
+        language: python
+        stages: [commit-msg]
+      # The app's source files stay under 500 lines (tests are exempt).
+      - id: file-length
+        name: app source files under 500 lines
+        entry: python scripts/check_file_length.py
+        language: python
+        files: ^src/.*\.py$
+        stages: [pre-commit]
+
+  # The app's Python: lint and format, with noqa comments ignored. Keep the ruff
+  # version here the same as in uv.lock (scripts/check_python.sh runs that one).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 2eeb5678de71a00c0902cbda7105d328432f72cb  # frozen: v0.16.8
+    hooks:
+      - id: ruff-check
+        args: ["--ignore-noqa"]
+      - id: ruff-format
+        types_or: [python, pyi]

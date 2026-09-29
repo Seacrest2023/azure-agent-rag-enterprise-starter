@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "type": "command",
+        "windows": "cmd /d /c \"python ../../.claude/hooks/block_hook_bypass.py --copilot || exit 2\"; exit $LASTEXITCODE",
+        "linux": "python ../../.claude/hooks/block_hook_bypass.py --copilot || exit 2",
+        "osx": "python ../../.claude/hooks/block_hook_bypass.py --copilot || exit 2",
+        "command": "exit 0",
+        "cwd": ".github/hooks",
+        "env": {
+          "NoDefaultCurrentDirectoryInExePath": "1"
+        },
+        "timeout": 60
+      }
+    ]
+  }
+}

@@ -1,0 +1,3 @@
+# Hashes of names this repository must never mention. Never write the names here.
+# Format: <length> <sha256> [paths]. Add with: python scripts/check_blocked_terms.py --add [--paths] "Name"
+# Entries may be added but never removed (enforced by the security gate).
