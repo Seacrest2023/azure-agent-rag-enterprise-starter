@@ -231,6 +231,7 @@ resource definitions in the repo → checkpoint → deploy job
 | --- | --- |
 | **In place** | The foundation (resource groups, region lock, budget, deploy identity), set up by hand once and recorded in `.claude/security-stack.json`. |
 | **In place** | CI signs in to Azure without a stored password, and the deploy identity can reach only the app's resource group. |
+| **In place** | The deploy identity can grant only six data roles (the Azure OpenAI and AI services users, the search index and service roles, and metrics publishing), only to service principals, only in the app's resource group. So the app's services connect without keys. A deploy can give itself those six roles too, since the deploy identity is a service principal, but nothing beyond them (checks-inventory.md, check 73). |
 | **Open** | The deploy identity's Contributor role can create any resource type in that resource group; no policy limits the types or requires deploys from infrastructure code. |
 | **Open** | Confirm Entra ID security defaults (sign-in with MFA for everyone) are on, and create an emergency admin account. Your steps. |
 | **Not built yet** | The app's resources written as code and applied by the deploy job: SQL, Search, storage, Key Vault, Azure OpenAI, Document Intelligence and Foundry, and the supporting services (Content Safety, API Management, Log Analytics, the Defender plans and private endpoints). |

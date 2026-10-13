@@ -16,7 +16,7 @@ A check that warns cannot be Full; one that ends in the owner's answer is Partia
 
 ## Coverage at a glance
 
-44, 45 and 51 count in two areas; all 72 checks appear.
+44, 45 and 51 count in two areas; all 73 checks appear.
 
 | Control area | SOC 2 | ISO 27001:2022 Annex A | NIST CSF 2.0 |
 | --- | --- | --- | --- |
@@ -27,7 +27,7 @@ A check that warns cannot be Full; one that ends in the owner's answer is Partia
 | The agent's reach: the owner's sign-ins and data leaving | Partial (3): CC6.1, CC6.7 | Partial (3): 5.14, 5.17, 8.12 | Partial (3): PR |
 | Supply chain and software integrity | Full (8): CC6.8, CC9.2 | Full (8): 5.19 to 5.22, 8.19 | Full (8): PR |
 | Vulnerability management | Partial (4): CC7.1 | Partial (4): 8.8 | Partial (4): ID, PR, DE |
-| Least privilege for CI and deploy identities | Full (6): CC6.1, CC6.2, CC6.3 | Full (6): 5.18, 8.2, 8.3, 8.5, 8.31 | Full (6): PR |
+| Least privilege for CI and deploy identities | Full (7): CC6.1, CC6.2, CC6.3 | Full (7): 5.18, 8.2, 8.3, 8.5, 8.31 | Full (7): PR |
 | Cloud configuration and data residency | Full (2): CC5.x | Full (2): 5.23, 5.31, 8.9 | Full (2): GV, PR |
 | Monitoring of main, settings and cloud | Partial (5): CC4.x, CC7.1, CC7.2 | Partial (5): 8.16 | Partial (5): DE |
 | Logging and immutable history | Partial (1): CC8.1 | Partial (1): 8.15 | Partial (1): DE |
@@ -35,7 +35,7 @@ A check that warns cannot be Full; one that ends in the owner's answer is Partia
 | Incident management, backup and recovery | Not covered: CC7.3, CC7.4, CC7.5 | Not covered: 5.24 to 5.28, 5.30, 8.13 | Not covered: RS, RC |
 | Governance, risk, policy and training | Not covered: CC1.x, CC2.x, CC3.x, CC9.1 | Not covered: 5.8, 5.35, 6.3, 6.8 | Not covered: GV |
 
-By check: 36 Full, 36 Partial (warns, needs a person, or runs only on the owner's computer).
+By check: 37 Full, 36 Partial (warns, needs a person, or runs only on the owner's computer).
 
 ## The mapping
 
@@ -139,6 +139,7 @@ Platform-enforced in Azure. None is under the one rule, and a portal change skip
 | 63 Monthly budget alerts | Unexpected spend is noticed | CC7.2 | 8.16 | DE | Partial: warns | budget readback; alert emails |
 | 64 Deploy identity limited to the app resource group | A deploy reaches only the app's resource group | CC6.3 | 5.18, 8.2, 8.3 | PR | Full | role assignment readback; Azure activity log |
 | 65 Sign-in only from the deploy environment, with no secret | CI signs in with no stored credential, from one environment only | CC6.1, CC6.2 | 5.17, 5.23, 8.5 | PR | Full | federated credential readback; check 46 logs |
+| 73 Deploy identity grants only six data roles | A deploy can grant only the app's data roles, only to service principals | CC6.1, CC6.3 | 5.18, 8.2 | PR | Full | role assignment read-back, condition included; Azure activity log |
 
 ### By hand
 

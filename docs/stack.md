@@ -220,7 +220,7 @@ QUESTIONS IN                                  WHO DOES IT
 | Microsoft Defender for Cloud | Threat protection; Defender for Storage scans uploads for malware | Free foundational plans in place; the rest not built yet |
 | Log Analytics | Collects the services' logs, including Azure SQL auditing and Key Vault logs | Not built yet |
 | Private endpoints | Keep the data services off the public internet | Not built yet |
-| The foundation | Resource groups, the region lock (East US 2), the monthly budget, and the keyless deploy identity | In place |
+| The foundation | Resource groups, the region lock (East US 2), the monthly budget, and the keyless deploy identity, whose right to grant roles is limited to six data roles, only to service principals | In place |
 
 ## 2. Code we write
 

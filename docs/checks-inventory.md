@@ -78,7 +78,7 @@ The columns:
 | 61 | Allowed locations for resource groups | Azure setting | Each resource group created | A resource group outside the project's region | Blocks | Platform-enforced | Platform setting: Azure | Turn on (the project's region) | No | Policy assignment `allowed-rg-locations` |
 | 62 | Cloud security benchmark audit | Azure setting | Continuously | Nothing: it reports resources that fall short of the benchmark | Warns | Platform-enforced | Platform setting: Azure | Turn on (with Defender for Cloud) | No | Policy assignment `SecurityCenterBuiltIn` |
 | 63 | Monthly budget alerts | Azure setting | As costs accrue | Spending going unnoticed | Warns | Platform-enforced | Platform setting: Azure | Turn on (the monthly amount) | No | The budget named in `.claude/security-stack.json` |
-| 64 | Deploy identity limited to the app resource group | Azure setting | Each deploy | The deploy identity acting outside the app resource group, or on its own permissions | Blocks | Platform-enforced | Platform setting: Azure | Turn on | No | Role assignment on the deploy identity |
+| 64 | Deploy identity limited to the app resource group | Azure setting | Each deploy | The deploy identity acting outside the app resource group, or raising its own rights beyond check 73 | Blocks | Platform-enforced | Platform setting: Azure | Turn on | No | Role assignments on the deploy identity |
 | 65 | Sign-in only from the deploy environment, with no secret | Azure setting | Each CI sign-in | Any other workflow signing in as the deploy identity; stored credentials | Blocks | Platform-enforced | Platform setting: Azure | Turn on (the repository and environment in the subject) | No | Federated credential on the deploy identity |
 | 66 | GitHub settings at the baseline | By hand | When run | GitHub settings that fall short of the baseline going unnoticed: the ruleset, Actions, Dependabot and the deploy environment | Warns | Fails closed (a setting it can't read ends the run with exit 2) | Our code | Copy as is | Yes | `scripts/github_settings.py` |
 | 67 | Review threads resolved before merging | GitHub setting | Each PR into the default branch | Merging while a review thread, a bot's included, is unresolved | Blocks | Platform-enforced | Platform setting: GitHub | Turn on | Yes | Ruleset (`pull_request`, conversation resolution) |
@@ -87,6 +87,7 @@ The columns:
 | 70 | Sign-in files denied to Claude Code | Claude Code setting | Before each file read, and each shell read Claude Code recognizes | Claude Code reading `~/.azure`, `~/.ssh`, `~/.config/gh`, `~/.aws`, `~/.docker/config.json` and `.env` files other than `.env.example` | Blocks | Platform-enforced (in every permission mode, bypass included) | Third-party tool: Claude Code (permission rules) | Copy as is | Yes | `.claude/settings.json` (`permissions.deny`) |
 | 71 | Sign-in reads and token printing refused | Claude Code hook | Before each shell command and file edit | Commands that read or copy those sign-ins or `.env` files, in bash or PowerShell, inline code that names them, edits to them, and commands that print a token (`gh auth token`, `gh auth status --show-token`, `az account get-access-token`, `aws configure export-credentials`) | Blocks | Fails closed | Our code | Copy as is | Yes | `block_hook_bypass.py` (`check_credentials`, `is_credential_path`) |
 | 72 | Outbound data asks the owner | Claude Code hook | Before each shell command and web fetch | Requests that send a body, upload a file or use a method other than GET; requests to a host that isn't on the allowlist or can't be read; `az rest` outside Azure and the allowlist; `gh gist create`; `git push` to a remote other than `origin`; remote URL changes; `scp`, `sftp`, `ssh`, `nc` and `rsync` to another computer; inline code that opens network connections | Blocks (asks the owner) | Fails closed | Our code | Copy and set values (the allowlist) | Yes | `block_hook_bypass.py` (`check_outbound`, `check_web_request`, `check_host`); `.claude/security-stack.json` (`network.allowed_hosts`); `.claude/settings.json` (matcher `WebFetch`) |
+| 73 | Deploy identity grants only six data roles | Azure setting | Each role assignment it adds or removes | Any other role (Owner, Contributor and every role-granting role included), any role for a user or group, and anything outside the app resource group | Blocks | Platform-enforced | Platform setting: Azure | Turn on (the roles the app needs) | No | Condition on the deploy identity's Role Based Access Control Administrator assignment |
 
 ## Each check
 
@@ -627,8 +628,8 @@ The columns:
 - **Lowering it:** raise the amount or remove it (from the terminal, the guard asks). The project gives up the alerts.
 
 ### 64. Deploy identity limited to the app resource group
-- **What it does:** the deploy identity holds one role assignment: Contributor on the app resource group. It lives in a separate resource group.
-- **What it stops:** a deploy reaching anything else, or changing its own permissions.
+- **What it does:** the deploy identity holds two role assignments, both on the app resource group: Contributor, and Role Based Access Control Administrator, limited by check 73's condition. It lives in a separate resource group.
+- **What it stops:** a deploy reaching anything outside the app resource group, or raising its own rights beyond check 73's six data roles: it can't change its Contributor or role-granting assignments, and the only roles it can give itself are those six.
 - **Why it exists:** setup prompt, decision 9.
 - **Tested by:** untested. Read back with `az role assignment list`.
 - **How to adopt:** turn on in Phase 6, steps 4 and 6.
@@ -701,6 +702,15 @@ The columns:
 - **How to adopt:** comes with the guard and `.claude/settings.json` (Phase 1, step 1); set the allowlist in the stack file (Phase 1, step 2).
 - **Lowering it:** adding a host to the allowlist is an ordinary change the guard asks the owner about, not a lowering. Removing the rule means changing the guard: `selftest` fails on the changed behaviour, so it needs the owner's temporary bypass. The project gives up choosing where the agent may send data.
 
+### 73. Deploy identity grants only six data roles
+- **What it does:** the deploy identity's Role Based Access Control Administrator assignment on the app resource group carries a condition, the portal's template "Constrain roles and principal types". It may add or remove only Cognitive Services OpenAI User, Cognitive Services User, Search Index Data Reader, Search Index Data Contributor, Search Service Contributor and Monitoring Metrics Publisher, and only for service principals.
+- **What it stops:** a deploy granting any other role (Owner, Contributor and every role-granting role included), any role to a user or group, or anything outside the app resource group.
+- **Why it exists:** keyless access. The app's services reach each other through managed identities and data roles, not keys, and Contributor can create resources but can't connect them without keys: granting a data role needs a role-granting right.
+- **Where it doesn't reach:** any service principal can receive the six roles, the deploy identity included; that's how CI loads the search index and runs the live tests. The template "Constrain roles and principals" is narrower, naming the principals too, once the app's identities exist.
+- **Tested by:** untested. Read back with `az role assignment list` (the `condition` field) or the portal's Role assignments tab.
+- **How to adopt:** turn on in Phase 6, step 6, by the owner in the portal ([setup-guide.md](setup-guide.md#the-role-granting-right-by-hand)).
+- **Lowering it:** add a role to the condition, allow users or groups, or remove the condition (from the terminal, the guard asks). The project gives up limiting what a deploy can grant.
+
 ## Lowering a protection
 
 Every check starts at its baseline setting. Lowering one is allowed, but only as the owner's deliberate, recorded decision. This follows the setup prompt's "Rules for the agent" (rule 2) and "The owner's approval":
@@ -719,12 +729,12 @@ Nothing yet: the baseline starts locked down. Each lowering adds a row.
 
 ## Summary
 
-All checks: **72** (`grep -cE '^[|] [0-9]+ [|]' docs/checks-inventory.md`).
+All checks: **73** (`grep -cE '^[|] [0-9]+ [|]' docs/checks-inventory.md`).
 
 By where it runs (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $3}' docs/checks-inventory.md | sort | uniq -c`):
 
 ```text
-      6 Azure setting
+      7 Azure setting
       1 By hand
      24 CI on PR
       2 CI scheduled
@@ -741,7 +751,7 @@ By type (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $8}' docs/checks-inventory.md 
 ```text
      25 Our code
      18 Our code, running a tool
-      6 Platform setting: Azure
+      7 Platform setting: Azure
      14 Platform setting: GitHub
       9 Third-party tool
 ```
@@ -752,7 +762,7 @@ By how it's adopted (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $9}' docs/checks-i
       8 Copy and set values
      28 Copy as is
      18 Install and pin
-     18 Turn on
+     19 Turn on
 ```
 
 None is "Write your own".
@@ -760,7 +770,7 @@ None is "Write your own".
 By whether it blocks (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $6}' docs/checks-inventory.md | sed -E 's/ [(].*//' | sort | uniq -c`):
 
 ```text
-     61 Blocks
+     62 Blocks
      11 Warns
 ```
 
@@ -808,5 +818,5 @@ On GitHub (read only):
 In Azure (read only, signed in to the project's tenant):
 - Policy assignments, **3**: `az policy assignment list --query 'length(@)'`
 - Budgets, **1**: `az consumption budget list --query 'length(@)'`
-- The deploy identity's role assignments, **1**: `az role assignment list --assignee "$(az identity show -n "$id" -g "$ci" --query principalId -o tsv)" --all --query 'length(@)'`
+- The deploy identity's role assignments, **2**: `az role assignment list --assignee "$(az identity show -n "$id" -g "$ci" --query principalId -o tsv)" --all --query 'length(@)'`
 - Federated credentials, **1**: `az identity federated-credential list --identity-name "$id" -g "$ci" --query 'length(@)'`

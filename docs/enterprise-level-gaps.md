@@ -66,7 +66,7 @@ Both are free for public repositories. A private repository needs an organisatio
 The product's own controls are designed in [architecture.md](architecture.md#10-security) but not built. Each is needed before real data goes in.
 
 - [ ] Infrastructure as code for every app resource, applied only by the deploy job, with a scan on every pull request.
-- [ ] Least privilege for the deploy identity: roles that cover only what the deploy does, in place of Contributor on the whole resource group. Add an Azure policy that allows only the resource types the project uses, as a second layer that applies to everyone.
+- [ ] Least privilege for the deploy identity: roles that cover only what the deploy does, in place of Contributor on the whole resource group. Its right to grant roles is already limited to six data roles, only to service principals (check 73); the template "Constrain roles and principals" narrows it further, to named principals, once the app's identities exist. Add an Azure policy that allows only the resource types the project uses, as a second layer that applies to everyone.
 - [ ] Drift checks: a scheduled job that flags when Azure, or a live agent, stops matching the repository.
 - [ ] Central logging, kept for as long as the standard you're audited against requires.
 - [ ] The runtime controls:

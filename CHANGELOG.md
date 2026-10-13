@@ -2,6 +2,12 @@
 
 What changed in the baseline, newest first. Versions are tagged `vMAJOR.MINOR.PATCH`.
 
+## v0.1.2 (13 October 2026)
+
+### Added
+
+- **The deploy identity's right to grant data roles (check 73).** On the app resource group, the deploy identity holds Role Based Access Control Administrator next to Contributor, limited by a condition to six data roles (Cognitive Services OpenAI User, Cognitive Services User, Search Index Data Reader, Search Index Data Contributor, Search Service Contributor and Monitoring Metrics Publisher) and to service principals, so the app's services connect without keys. The setup guide has the portal steps, and the setup prompt the read-back.
+
 ## v0.1.1 (29 September 2026)
 
 ### Changed

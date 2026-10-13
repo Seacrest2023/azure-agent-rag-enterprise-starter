@@ -80,9 +80,9 @@ Also read-only workflow tokens, SHA-pinned actions, and Dependabot. The agent al
 
 ### 7. Azure foundation (agent, after you approve its plan: Phase 6)
 
-Two resource groups (one for the app, one for the deploy identity), the region lock, the deploy identity with Contributor on the app resource group only, its federated credential, and the monthly budget.
+Two resource groups (one for the app, one for the deploy identity), the region lock, the deploy identity with Contributor on the app resource group, its federated credential, and the monthly budget. You add the deploy identity's second role yourself, in the portal: the right to grant six data roles there, only to service principals ([by hand](#the-role-granting-right-by-hand)).
 
-**Check:** the deploy identity has exactly one role assignment; both region policies are assigned; the budget exists; every name and ID is recorded in `.claude/security-stack.json`.
+**Check:** the deploy identity has exactly two role assignments, both on the app resource group: Contributor, and Role Based Access Control Administrator with its condition; both region policies are assigned; the budget exists; every name and ID is recorded in `.claude/security-stack.json`.
 
 ### 8. Keyless CI sign-in (agent: Phase 7)
 
@@ -152,6 +152,20 @@ Four things that catch people out:
 
 To check your work, run `python scripts/github_settings.py`. It reports anything below the baseline.
 
+## The role-granting right by hand
+
+Step 7's second role assignment, which you add yourself in the Azure portal. It lets a deploy connect the app's services without keys: it can grant six data roles, only to service principals, only in the app resource group ([checks-inventory.md](checks-inventory.md#73-deploy-identity-grants-only-six-data-roles)).
+
+**The app resource group → Access control (IAM) → Add → Add role assignment:**
+1. **Role:** under **Privileged administrator roles**, pick **Role Based Access Control Administrator**.
+2. **Members:** assign access to **Managed identity**, then **Select members**: the user-assigned managed identity `id-<project>-gh-deploy`.
+3. **Conditions:** pick **Allow user to only assign selected roles to selected principals (fewer privileges)**, then the template **Constrain roles and principal types**.
+4. **Roles:** from **Job function roles** only, nothing from **Privileged administrator roles**: Cognitive Services OpenAI User, Cognitive Services User, Search Index Data Reader, Search Index Data Contributor, Search Service Contributor and Monitoring Metrics Publisher.
+5. **Principal types:** **Service principals** only.
+6. **Save**, then **Review + assign**.
+
+**Check:** `az role assignment list --assignee <principal ID> --all --query "[].{role:roleDefinitionName, scope:scope, condition:condition}"` shows two assignments on the app resource group: Contributor, and Role Based Access Control Administrator, whose condition names the six roles' IDs and `ServicePrincipal`.
+
 ## Final check
 
 | What | How | Expected |
@@ -164,7 +178,7 @@ To check your work, run `python scripts/github_settings.py`. It reports anything
 | Actions | `gh api repos/<owner>/<repo>/actions/permissions/workflow` | read-only token; Actions can't approve PRs |
 | GitHub settings | `python scripts/github_settings.py` | every setting at the baseline or stricter |
 | CI sign-in | `gh workflow run azure-login-check.yml`, then `gh run watch` | the run succeeds, and its log shows the app resource group |
-| Deploy identity | `az role assignment list --assignee <principal ID> --all` | exactly one: Contributor on the app resource group |
+| Deploy identity | `az role assignment list --assignee <principal ID> --all` | exactly two, both on the app resource group: Contributor, and Role Based Access Control Administrator, whose condition names the six data roles and `ServicePrincipal` |
 
 ## What's left
 
