@@ -235,7 +235,7 @@ resource definitions in the repo → checkpoint → deploy job
 | **Open** | The deploy identity's Contributor role can create any resource type in that resource group; no policy limits the types or requires deploys from infrastructure code. |
 | **Open** | Confirm Entra ID security defaults (sign-in with MFA for everyone) are on, and create an emergency admin account. Your steps. |
 | **Not built yet** | The app's resources written as code and applied by the deploy job: SQL, Search, storage, Key Vault, Azure OpenAI, Document Intelligence and Foundry, and the supporting services (Content Safety, API Management, Log Analytics, the Defender plans and private endpoints). |
-| **Not built yet** | A scan of that code on every pull request. |
+| **In place** | A build, lint and Checkov scan of that code on every pull request, with tests of both steps (checks-inventory.md, checks 74 and 75). Neither is a required check yet: a failed run shows, but doesn't stop a merge. |
 
 ### 3. Agent configuration: what the agent may do
 

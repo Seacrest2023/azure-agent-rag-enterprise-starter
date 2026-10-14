@@ -16,7 +16,7 @@ A check that warns cannot be Full; one that ends in the owner's answer is Partia
 
 ## Coverage at a glance
 
-44, 45 and 51 count in two areas; all 73 checks appear.
+44, 45 and 51 count in two areas; all 75 checks appear.
 
 | Control area | SOC 2 | ISO 27001:2022 Annex A | NIST CSF 2.0 |
 | --- | --- | --- | --- |
@@ -29,13 +29,14 @@ A check that warns cannot be Full; one that ends in the owner's answer is Partia
 | Vulnerability management | Partial (4): CC7.1 | Partial (4): 8.8 | Partial (4): ID, PR, DE |
 | Least privilege for CI and deploy identities | Full (7): CC6.1, CC6.2, CC6.3 | Full (7): 5.18, 8.2, 8.3, 8.5, 8.31 | Full (7): PR |
 | Cloud configuration and data residency | Full (2): CC5.x | Full (2): 5.23, 5.31, 8.9 | Full (2): GV, PR |
+| Infrastructure code checked before it deploys | Partial (2): CC7.1, CC8.1 | Partial (2): 8.9, 8.28 | Partial (2): PR |
 | Monitoring of main, settings and cloud | Partial (5): CC4.x, CC7.1, CC7.2 | Partial (5): 8.16 | Partial (5): DE |
 | Logging and immutable history | Partial (1): CC8.1 | Partial (1): 8.15 | Partial (1): DE |
 | User access management: people, MFA, reviews | Not covered: CC6.2, CC6.3 | Not covered: 5.15, 5.16, 5.18 | Not covered: PR |
 | Incident management, backup and recovery | Not covered: CC7.3, CC7.4, CC7.5 | Not covered: 5.24 to 5.28, 5.30, 8.13 | Not covered: RS, RC |
 | Governance, risk, policy and training | Not covered: CC1.x, CC2.x, CC3.x, CC9.1 | Not covered: 5.8, 5.35, 6.3, 6.8 | Not covered: GV |
 
-By check: 37 Full, 36 Partial (warns, needs a person, or runs only on the owner's computer).
+By check: 37 Full, 38 Partial (warns, needs a person, or runs only on the owner's computer).
 
 ## The mapping
 
@@ -84,7 +85,7 @@ The five required jobs run from main's copy of `security-gate.yml`, with tools i
 | --- | --- | --- | --- | --- | --- | --- |
 | 21 Secret scan of the PR | No secret reaches main, hooks skipped or not | CC6.1 | 5.17, 8.12, 8.29 | PR | Full | secret-scan logs |
 | 22 Commit checks replayed | The commit checks cannot be skipped | CC8.1 | 8.29, 8.32 | PR | Full | precommit logs |
-| 23 Tests of the gate and the guard | The controls are themselves tested on every change (288 tests) | CC4.x, CC8.1 | 8.29, 8.32 | PR | Full | selftest logs |
+| 23 Tests of the gate and the guard | The controls are themselves tested on every change (302 tests) | CC4.x, CC8.1 | 8.29, 8.32 | PR | Full | selftest logs |
 | 24 Gate: no new suppressions | Green cannot be reached by silencing a check | CC8.1 | 8.28, 8.29 | PR | Full | gate logs |
 | 25 Gate: no blocked names | Listed names cannot reach main by any route | CC8.1 | 8.12 | PR | Full | gate logs |
 | 26 Gate: risky workflow settings | Changed workflows are scanned for unsafe settings | CC8.1 | 8.9, 8.27 | PR | Full | gate logs |
@@ -96,6 +97,7 @@ The five required jobs run from main's copy of `security-gate.yml`, with tools i
 | 35 Tests; 36 Skipped tests fail the run; 37 Changed-line coverage | Changes are tested, 80% of changed lines covered, no skip is green | CC8.1 | 8.29 | PR | Full | python logs |
 | 40 Known vulnerabilities | No package with a known vulnerability merges | CC7.1 | 8.8 | ID, PR | Full | python logs |
 | 41 Hash-checked installs for the Python checks; 42 Hash-pinned tools for the security jobs; 43 Seven-day cooldown on package versions | The judging tools are the intended ones; no release under seven days old | CC6.8, CC9.2 | 5.19 to 5.22, 8.19 | PR | Full | python and gate logs; `.github/requirements/`; `uv.lock` |
+| 74 Infrastructure code builds and lints clean; 75 Infrastructure code scanned (Checkov) | A failed run shows infrastructure code that doesn't compile, doesn't lint clean or carries an insecure setting, before the deploy applies it; nothing blocks on it until it's a required check | CC7.1, CC8.1 | 8.9, 8.28 | PR | Partial: warns until required | infra logs |
 
 ### CI scheduled
 

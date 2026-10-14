@@ -17,7 +17,7 @@ To adopt the baseline in your own repository:
 3. Add your use case: copy [docs/use-cases/_template.md](docs/use-cases/_template.md) and answer its questions first. The [restaurant use case](docs/use-cases/restaurant.md) is a worked example.
 4. Before you rely on the baseline for a business, read [the caveats](docs/enterprise-level-gaps.md#caveats-for-anyone-adopting-this-baseline). It isn't certified, and meeting SOC 2 or ISO/IEC 27001 needs independent review of every change.
 
-**Tested with VS Code on Windows,** with Claude Code and GitHub Copilot Chat. The runtime guard runs in both. The git hooks and the pull request checks hold for every agent, and most of the stack doesn't depend on the agent or the editor. [docs/coding-agents.md](docs/coding-agents.md) says what's supported where, and has prompt templates to port the guard to another agent or adapt the checks to another language or CI.
+**Tested with VS Code on Windows,** with Claude Code and GitHub Copilot Chat. The runtime guard runs in both. It's a brake, not a sandbox: it checks the tool calls its hook receives, not what runs inside a script file the agent writes and then runs. The pull request checks judge what such a script changes in the repository; a change it makes elsewhere, such as in Azure, they can't see. The git hooks and the pull request checks hold for every agent, and most of the stack doesn't depend on the agent or the editor. [docs/coding-agents.md](docs/coding-agents.md) says what's supported where, and has prompt templates to port the guard to another agent or adapt the checks to another language or CI.
 
 What changes between versions is in [CHANGELOG.md](CHANGELOG.md).
 

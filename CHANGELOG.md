@@ -2,6 +2,21 @@
 
 What changed in the baseline, newest first. Versions are tagged `vMAJOR.MINOR.PATCH`.
 
+## v0.1.3 (13 October 2026)
+
+### Added
+
+- **Infrastructure code checks on every pull request (checks 74 and 75).** Every Bicep file must build and lint clean, with the Bicep CLI pinned by file hash, and Checkov, installed from a hash-pinned list, scans it with nothing fetched from or sent to its vendor. Any finding fails the run, and so does a scan that read nothing. Tests run each step's own script (`tests/gate/test_infra_steps.py`). Neither is a required check yet.
+- **A report of the data roles the deploy identity can grant (check 46).** The keyless sign-in check, run by hand, also writes to its job summary the deploy identity's role assignments on the app resource group, each with its condition, and for each data role the app's identity needs (Search Index Data Contributor, Cognitive Services OpenAI User, Cognitive Services User, Monitoring Metrics Publisher) whether the deploy identity can grant it: yes, unclear or no. It looks each role up by name, only reads, and never fails the run.
+
+### Changed
+
+- **Docs for a public repository.** The gaps list's section 7 is now "If your repository is public", a decision for whoever adopts the starter, and the README says the guard is a brake, not a sandbox: it can't see inside a script file the agent writes and then runs.
+
+### Fixed
+
+- **A gate test couldn't run on Windows (`tests/gate/test_infra_steps.py`),** because Windows can't create a file name with a line break. That case now runs only where the file system allows it, and CI runs Linux.
+
 ## v0.1.2 (13 October 2026)
 
 ### Added

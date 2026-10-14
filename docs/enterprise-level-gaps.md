@@ -78,7 +78,9 @@ The product's own controls are designed in [architecture.md](architecture.md#10-
   - prompt-injection filtering
 - [ ] Access tests in `tests/access`, protected by the gate, before the first real data.
 
-## 7. Before the repository goes public
+## 7. If your repository is public
+
+The starter itself runs no workflows: its Actions are off, so no pull request's code runs here. The two decisions below are for your copy.
 
 - [ ] Three required jobs run a pull request's code under `pull_request_target`: `precommit`, `selftest` and `python`. That's acceptable only for a private repository, where only collaborators open pull requests. The comment in `security-gate.yml` gives the public option for the first two: run them on `pull_request`, where a pull request controls their steps. Decide it for all three, and say which checks a pull request then can't rewrite.
 - [ ] Turn on section 3's scanning, which is free once the repository is public.

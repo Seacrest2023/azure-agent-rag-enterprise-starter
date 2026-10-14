@@ -1,0 +1,117 @@
+name: infra
+
+# Every pull request and every push to main: the infrastructure code builds and
+# lints clean with a Bicep compiler pinned by file hash, and Checkov scans it,
+# installed from a hash-pinned list. Any finding fails. Neither job is a required
+# check yet (the owner's call); the gate refuses a job outside the trusted
+# workflow that reports a required name.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bicep:
+    name: bicep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The binary's hash is in .github/bicep/bicep-linux-x64.sha256; change the
+      # version and that file together.
+      - name: Install Bicep (pinned by file hash)
+        env:
+          BICEP_VERSION: v0.48.1
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/bicep-linux-x64" \
+            "https://github.com/Azure/bicep/releases/download/$BICEP_VERSION/bicep-linux-x64"
+          (cd "$RUNNER_TEMP" && sha256sum --check --strict "$GITHUB_WORKSPACE/.github/bicep/bicep-linux-x64.sha256")
+          install -m 0755 "$RUNNER_TEMP/bicep-linux-x64" "$RUNNER_TEMP/bicep"
+
+      # Paths are read NUL-separated, so any file name is one file, and passed
+      # with ./ in front, so a name like an option is a file, not an option.
+      # Tested by tests/gate/test_infra_steps.py.
+      - name: Build and lint every Bicep file (any diagnostic fails)
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.bicep' > "$RUNNER_TEMP/bicep-files"
+          mapfile -d '' -t files < "$RUNNER_TEMP/bicep-files"
+          if [ "${#files[@]}" -eq 0 ]; then echo "No Bicep files."; exit 0; fi
+          failed=0
+          for f in "${files[@]}"; do
+            if ! "$RUNNER_TEMP/bicep" build "./$f" --stdout > /dev/null; then
+              echo "::error file=$f::Bicep build failed"
+              failed=1
+              continue
+            fi
+            # Any output is a diagnostic; a lint that fails without one fails too.
+            if ! out=$("$RUNNER_TEMP/bicep" lint "./$f" 2>&1) || [ -n "$out" ]; then
+              printf '%s\n' "$out"
+              echo "::error file=$f::Bicep lint findings"
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  checkov:
+    name: checkov
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Checkov (hash-pinned, wheels only)
+        run: |
+          python -m venv "$RUNNER_TEMP/checkov"
+          "$RUNNER_TEMP/checkov/bin/pip" install --no-deps --only-binary :all: --require-hashes \
+            -r .github/checkov/requirements.txt
+
+      # --skip-download, and the update check off: nothing is fetched from, or
+      # sent to, Checkov's vendor, and it doesn't ask PyPI for a newer version.
+      # Checkov passes a scan that read nothing, so the run also fails when the
+      # repository holds Bicep files and Checkov counted no resources in them,
+      # or wrote no readable report. Tested by tests/gate/test_infra_steps.py.
+      - name: Scan the infrastructure code (any finding fails)
+        env:
+          CKV_SKIP_PACKAGE_UPDATE_CHECK: "true"
+        run: |
+          set -euo pipefail
+          status=0
+          "$RUNNER_TEMP/checkov/bin/checkov" --directory . --framework bicep --skip-download --compact \
+            --output cli --output json --output-file-path "console,$RUNNER_TEMP/checkov.json" || status=$?
+          bicep_files=$(git ls-files -- '*.bicep')
+          if [ -n "$bicep_files" ]; then
+            python3 - "$RUNNER_TEMP/checkov.json" <<'EOF' || status=1
+          import json, sys
+          try:
+              with open(sys.argv[1], encoding="utf-8") as fh:
+                  data = json.load(fh)
+          except (OSError, ValueError) as error:
+              print(f"::error::Checkov wrote no readable report: {error}")
+              sys.exit(1)
+          reports = data if isinstance(data, list) else [data]
+          results = [r for r in reports if isinstance(r, dict) and r.get("check_type") == "bicep"]
+          summary = results[0].get("summary", {}) if results else {}
+          if summary.get("resource_count", 0) == 0 or summary.get("parsing_errors", 0) > 0:
+              print(f"::error::Checkov read no Bicep resources, or failed to parse a file: {summary}")
+              sys.exit(1)
+          EOF
+          fi
+          exit "$status"

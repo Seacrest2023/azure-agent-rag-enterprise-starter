@@ -186,7 +186,7 @@ People are governed the same way the agent is: by permissions the database enfor
 
 ## 10. Security
 
-Ordered by the phase in which each item must be in place; items 24–26 name their phase. Items 1–6 are the repository's generic security stack: how it works and how to set it up in any repository is in [security-setup-prompt.md](security-setup-prompt.md), and this project's values and setup status are in `.claude/security-stack.json`. Of the later phases, three parts exist so far: the CI deploy identity (a managed identity, item 11), Defender for Cloud's free foundational plans (item 14), and the dependency audit (item 22). Everything else in the later phases is design. The step-by-step way to set it all up again is [setup-guide.md](setup-guide.md).
+Ordered by the phase in which each item must be in place; items 24–26 name their phase. Items 1–6 are the repository's generic security stack: how it works and how to set it up in any repository is in [security-setup-prompt.md](security-setup-prompt.md), and this project's values and setup status are in `.claude/security-stack.json`. Of the later phases, four parts exist so far: the CI deploy identity (a managed identity, item 11), the infrastructure code checks on every pull request (item 13), Defender for Cloud's free foundational plans (item 14), and the dependency audit (item 22). Everything else in the later phases is design. The step-by-step way to set it all up again is [setup-guide.md](setup-guide.md).
 
 One rule governs agents: they never skip or change enforcement without the owner's approval. What protects each stop a change passes through, today's status and what's still open are in [security.md](security.md). This section is the plan: which measure has to be in place by which phase.
 
@@ -216,7 +216,7 @@ One rule governs agents: they never skip or change enforcement without the owner
 | --- | --- |
 | 11 | Managed identities everywhere; the few remaining secrets in Key Vault. No connection strings or keys in app settings. (Exists so far: the CI deploy identity.) |
 | 12 | Private endpoints for Azure SQL, Blob Storage, AI Search, Azure OpenAI and Key Vault; public access off. |
-| 13 | Infrastructure code scanned in CI (Checkov or the Bicep linter). |
+| 13 | Infrastructure code scanned in CI (Checkov or the Bicep linter). (Exists so far: both, on every pull request; not yet required checks.) |
 | 14 | Defender for Cloud on; Azure SQL auditing and Key Vault logs sent to Log Analytics. (Exists so far: Defender for Cloud's free foundational plans.) |
 
 ### Ingestion and seeding

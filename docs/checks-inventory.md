@@ -60,7 +60,7 @@ The columns:
 | 43 | Seven-day cooldown on package versions | CI on PR | Each time `uv.lock` is resolved; CI checks the lock is current | Package versions uploaded in the last seven days | Blocks | Fails closed | Third-party tool: uv (pinned in `security-gate.yml`) | Install and pin (`exclude-newer` in `pyproject.toml`) | Yes | `pyproject.toml` (`[tool.uv]`); `uv.lock` |
 | 44 | Secret scan of main | CI scheduled | After each merge to main, and daily | A secret on main, including one only newer patterns detect | Warns (a failed run blocks nothing) | Fails visibly | Our code, running detect-secrets | Copy as is | Yes | `.github/workflows/security.yml` (secret-scan-main) |
 | 45 | Vulnerability audit of main | CI scheduled | After each merge to main, and daily | A vulnerability disclosed after a package was merged | Warns (a failed run blocks nothing) | Fails visibly | Our code, running pip-audit | Copy as is | Yes | `security.yml` (dependency-audit-main) |
-| 46 | Keyless Azure sign-in proof | CI, run by hand | When run | A broken sign-in, found before a deploy needs it | Warns (a failed run) | Fails visibly | Our code, running the azure/login action | Copy and set values (the environment name) | Yes | `.github/workflows/azure-login-check.yml` |
+| 46 | Keyless Azure sign-in proof | CI, run by hand | When run | A broken sign-in, found before a deploy needs it; it also reports which data roles the deploy identity can grant | Warns (a failed run) | Fails visibly | Our code, running the azure/login action | Copy and set values (the environment name) | Yes | `.github/workflows/azure-login-check.yml` |
 | 47 | Required status checks | GitHub setting | Each PR into the default branch | Merging unless every required check passes on an up-to-date branch | Blocks | Platform-enforced | Platform setting: GitHub | Turn on (the required check names) | Yes | Ruleset on the default branch (`required_status_checks`) |
 | 48 | Pull request required, squash only | GitHub setting | Each change to the default branch | Direct pushes; merge commits and rebase merges | Blocks | Platform-enforced | Platform setting: GitHub | Turn on | Yes | Ruleset (`pull_request`) |
 | 49 | Code-owner review for other authors | GitHub setting | Each PR that changes a file in CODEOWNERS | Merging such a PR by an author who isn't a code owner until the owner approves; approvals are dismissed by a new push | Blocks | Platform-enforced | Platform setting: GitHub | Turn on | Yes | Ruleset (`pull_request`) |
@@ -88,6 +88,8 @@ The columns:
 | 71 | Sign-in reads and token printing refused | Claude Code hook | Before each shell command and file edit | Commands that read or copy those sign-ins or `.env` files, in bash or PowerShell, inline code that names them, edits to them, and commands that print a token (`gh auth token`, `gh auth status --show-token`, `az account get-access-token`, `aws configure export-credentials`) | Blocks | Fails closed | Our code | Copy as is | Yes | `block_hook_bypass.py` (`check_credentials`, `is_credential_path`) |
 | 72 | Outbound data asks the owner | Claude Code hook | Before each shell command and web fetch | Requests that send a body, upload a file or use a method other than GET; requests to a host that isn't on the allowlist or can't be read; `az rest` outside Azure and the allowlist; `gh gist create`; `git push` to a remote other than `origin`; remote URL changes; `scp`, `sftp`, `ssh`, `nc` and `rsync` to another computer; inline code that opens network connections | Blocks (asks the owner) | Fails closed | Our code | Copy and set values (the allowlist) | Yes | `block_hook_bypass.py` (`check_outbound`, `check_web_request`, `check_host`); `.claude/security-stack.json` (`network.allowed_hosts`); `.claude/settings.json` (matcher `WebFetch`) |
 | 73 | Deploy identity grants only six data roles | Azure setting | Each role assignment it adds or removes | Any other role (Owner, Contributor and every role-granting role included), any role for a user or group, and anything outside the app resource group | Blocks | Platform-enforced | Platform setting: Azure | Turn on (the roles the app needs) | No | Condition on the deploy identity's Role Based Access Control Administrator assignment |
+| 74 | Infrastructure code builds and lints clean | CI on PR | Each PR, and each push to main | Bicep that doesn't compile, or any linter diagnostic, warnings included, in any tracked `.bicep` file | Warns (a failed run; not a required check yet) | Fails visibly | Our code, running the Bicep CLI | Install and pin (the version and the binary's file hash) | Yes | `.github/workflows/infra.yml` (bicep); `.github/bicep/bicep-linux-x64.sha256` |
+| 75 | Infrastructure code scanned (Checkov) | CI on PR | Each PR, and each push to main | Any Checkov finding in the Bicep; a scan that read no resources, or couldn't parse a file | Warns (a failed run; not a required check yet) | Fails visibly | Third-party tool: Checkov | Install and pin (in `.github/checkov/requirements.txt`) | Yes | `.github/workflows/infra.yml` (checkov); `.github/checkov/requirements.txt` |
 
 ## Each check
 
@@ -269,10 +271,10 @@ The columns:
 - **Lowering it:** remove the job or its required status; the gate refuses that, so it needs the owner's temporary bypass. The project gives up enforcing the commit checks for changes that skip them.
 
 ### 23. Tests of the gate and the guard
-- **What it does:** runs `tests/gate` and `tests/hooks` with the default branch's copy first, then the PR's, against the PR's code. `tests/gate` runs the gate against a fake GitHub API with known-good and known-bad PRs, and tests the commit-message and file-length hooks. `tests/hooks` runs the guard on commands it must block, allow, ask about or refuse. `tests/access` is reserved in CODEOWNERS and has no tests yet.
+- **What it does:** runs `tests/gate` and `tests/hooks` with the default branch's copy first, then the PR's, against the PR's code. `tests/gate` runs the gate against a fake GitHub API with known-good and known-bad PRs, tests the commit-message and file-length hooks and the GitHub settings script, and runs the scripts of the secret-scan step and the infrastructure checks' steps in throwaway repositories. `tests/hooks` runs the guard on commands it must block, allow, ask about or refuse. `tests/access` is reserved in CODEOWNERS and has no tests yet.
 - **What it stops:** a PR that weakens the gate or the guard together with the tests that would catch it.
 - **Why it exists:** a tested behaviour can be extended, not silently changed (setup prompt, decision 5).
-- **Tested by:** it is the tests: 113 in `tests/gate` (98 for the gate, 10 for the GitHub settings script, 5 for the secret-scan step), 175 in `tests/hooks` (commands under [How to recount](#how-to-recount)).
+- **Tested by:** it is the tests: 127 in `tests/gate` (98 for the gate, 10 for the GitHub settings script, 5 for the secret-scan step, 14 for the infrastructure checks' steps), 175 in `tests/hooks` (commands under [How to recount](#how-to-recount)).
 - **How to adopt:** comes with `security-gate.yml` and `tests/` (Phase 1); run locally in Phase 2, step 1.
 - **Lowering it:** remove the job or a test. The gate refuses a removed required check name, or a removed test name in any of the four test files (check 28), so it needs the owner's temporary bypass. The project gives up the proof that the gate and the guard still work.
 
@@ -484,8 +486,8 @@ The columns:
 - **Lowering it:** remove the job (the guard asks; no gate refusal). The project gives up the daily audit.
 
 ### 46. Keyless Azure sign-in proof
-- **What it does:** a workflow run by hand. It signs in to Azure from the deploy environment through the federated credential, and shows the app resource group.
-- **What it stops:** nothing directly; a failure shows the sign-in is broken before a deploy needs it.
+- **What it does:** a workflow run by hand. It signs in to Azure from the deploy environment through the federated credential, and shows the app resource group. It then reports, in the job summary, the deploy identity's role assignments on that group with their conditions, and whether it can grant each data role the app's managed identity needs, with every built-in role's ID looked up by its name in Azure (a name Azure doesn't know reads unknown): yes when a role that can create role assignments has no condition, or a condition whose write branch allows that role for a service principal; unclear when the condition has any other limit, such as a principal ID; no otherwise. The report never fails the run, so a deploy identity that holds Contributor alone still passes. It finds the identity's object ID in its own token's `oid` claim, read in a pipe, so the token is never printed. It only reads.
+- **What it stops:** nothing directly; a failure shows the sign-in is broken before a deploy needs it. A role that reads no or unclear is for the owner to grant or check before a deploy that needs it.
 - **Why it exists:** keyless sign-in has several moving parts: the environment, the variables, the identity and the subject.
 - **Tested by:** untested. Run it to check.
 - **How to adopt:** comes with `.github/workflows/azure-login-check.yml`; set the environment name if it isn't `dev` (Phase 1, step 3), and run it in Phase 7, step 3.
@@ -711,6 +713,22 @@ The columns:
 - **How to adopt:** turn on in Phase 6, step 6, by the owner in the portal ([setup-guide.md](setup-guide.md#the-role-granting-right-by-hand)).
 - **Lowering it:** add a role to the condition, allow users or groups, or remove the condition (from the terminal, the guard asks). The project gives up limiting what a deploy can grant.
 
+### 74. Infrastructure code builds and lints clean
+- **What it does:** downloads the Bicep CLI (v0.48.1) and checks it against its SHA-256 in `.github/bicep/bicep-linux-x64.sha256` before running it, then builds and lints every tracked `.bicep` file, whatever characters its name holds. Any linter diagnostic fails the run, warnings included, and so does a build or a lint that fails.
+- **What it stops:** nothing directly, since it isn't a required check yet; a failed run shows infrastructure code that doesn't compile, or that the linter flags, before the deploy applies it.
+- **Why it exists:** infrastructure changes go through the pull request like any code (architecture, Section 10, items 13 and 24).
+- **Tested by:** `tests/gate/test_infra_steps.py`, 6 tests that run the step's own script with a stand-in for the Bicep CLI: no Bicep files, clean files, a diagnostic, a lint that fails without one, a build failure, and file names with a newline, a space or a leading `--`. Selftest runs them (check 23).
+- **How to adopt:** comes with `.github/workflows/infra.yml`, the checksum file and the tests. To move to another Bicep release, change the version in the workflow and the hash in `.github/bicep/bicep-linux-x64.sha256` together.
+- **Lowering it:** delete the job (the guard asks; the gate doesn't refuse it, since it isn't a required check), after a PR that removes its tests: selftest runs the default branch's copy of them against every PR. The project gives up a compile and lint check on its infrastructure code. Making it a required check is the owner's call.
+
+### 75. Infrastructure code scanned (Checkov)
+- **What it does:** installs Checkov (3.3.23) and the 95 packages it needs from `.github/checkov/requirements.txt`, each pinned by file hash, wheels only, then scans every Bicep file in the repository. Any finding fails the run. It runs with `--skip-download` and with Checkov's update check off, so nothing is fetched from, or sent to, Checkov's vendor, and it doesn't ask PyPI for a newer version. Checkov passes a scan that read nothing, so the run also fails when the repository holds Bicep files and Checkov counted no resources in them, couldn't parse one, or wrote no readable report.
+- **What it stops:** nothing directly, since it isn't a required check yet; a failed run shows insecure Azure settings in the infrastructure code, such as keys left on, public access or a missing identity, before the deploy applies them.
+- **Why it exists:** architecture, Section 10, item 13.
+- **Tested by:** `tests/gate/test_infra_steps.py`, 8 tests that run the step's own script with a stand-in for Checkov: that it scans Bicep offline, a finding, a scan that read nothing, a parse error, no report, a report that isn't JSON, a report for several frameworks, and no Bicep files. Selftest runs them (check 23). It was also run against the slice's draft Bicep: it failed on four findings, and on a probe account with public network access.
+- **How to adopt:** comes with `.github/workflows/infra.yml`, the list and the tests. Re-pin the list rather than copying it: resolve Checkov with a seven-day cooldown, then hash the Linux x86_64 wheels for CPython 3.12. The list isn't a trusted job's list: the workflow reads it from the pull request. When the check becomes required, move it into the trusted workflow and the list into `.github/requirements/`, where check 29 freezes it; adding a list there needs the owner's temporary bypass.
+- **Lowering it:** accepting a finding is the owner's recorded decision: an entry naming that resource and check in a Checkov baseline file that the workflow passes to Checkov, and a line in [Lowered from the baseline](#lowered-from-the-baseline). Removing the job or a flag is an enforcement change the guard asks about (no gate refusal); removing the job takes a PR that removes its tests first, as for check 74. The project gives up scanning its infrastructure code.
+
 ## Lowering a protection
 
 Every check starts at its baseline setting. Lowering one is allowed, but only as the owner's deliberate, recorded decision. This follows the setup prompt's "Rules for the agent" (rule 2) and "The owner's approval":
@@ -729,14 +747,14 @@ Nothing yet: the baseline starts locked down. Each lowering adds a row.
 
 ## Summary
 
-All checks: **73** (`grep -cE '^[|] [0-9]+ [|]' docs/checks-inventory.md`).
+All checks: **75** (`grep -cE '^[|] [0-9]+ [|]' docs/checks-inventory.md`).
 
 By where it runs (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $3}' docs/checks-inventory.md | sort | uniq -c`):
 
 ```text
       7 Azure setting
       1 By hand
-     24 CI on PR
+     26 CI on PR
       2 CI scheduled
       1 CI, run by hand
      12 Claude Code hook
@@ -750,10 +768,10 @@ By type (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $8}' docs/checks-inventory.md 
 
 ```text
      25 Our code
-     18 Our code, running a tool
+     19 Our code, running a tool
       7 Platform setting: Azure
      14 Platform setting: GitHub
-      9 Third-party tool
+     10 Third-party tool
 ```
 
 By how it's adopted (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $9}' docs/checks-inventory.md | sed -E 's/ [(].*//' | sort | uniq -c`):
@@ -761,7 +779,7 @@ By how it's adopted (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $9}' docs/checks-i
 ```text
       8 Copy and set values
      28 Copy as is
-     18 Install and pin
+     20 Install and pin
      19 Turn on
 ```
 
@@ -771,7 +789,7 @@ By whether it blocks (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $6}' docs/checks-
 
 ```text
      62 Blocks
-     11 Warns
+     13 Warns
 ```
 
 ## How to recount
@@ -791,20 +809,22 @@ In the repository:
 - Claude Code hook registrations, **6**: `jq '[.hooks[][] | .hooks[]] | length' .claude/settings.json`
 - Copilot Chat hook registrations, **1**: `jq '[.hooks[][]] | length' .github/hooks/agent-guard.json`
 - pre-commit hooks, **10**: `grep -cE '^\s+- id:' .pre-commit-config.yaml`
-- Workflow jobs, **1, 5 and 2** (azure-login-check, security-gate, security): `for f in .github/workflows/*.yml; do printf '%s ' "$f"; awk '/^jobs:/{f=1;next} f && /^  [A-Za-z0-9_-]+:$/{n++} END{print n}' "$f"; done`
+- Workflow jobs, **1, 2, 5 and 2** (azure-login-check, infra, security-gate, security): `for f in .github/workflows/*.yml; do printf '%s ' "$f"; awk '/^jobs:/{f=1;next} f && /^  [A-Za-z0-9_-]+:$/{n++} END{print n}' "$f"; done`
 - Sections of the security gate, **6**: `grep -c '^# --- [0-9]\.' scripts/security_gate.sh`
 - Protected lists, **11**: `grep -c '^protect ' scripts/security_gate.sh`
 - Checks in the Python script, **8**: `grep -cE '^\s*check "' scripts/check_python.sh`
 - Gate tests, **98**: `grep -cE '^\s*def test_' tests/gate/test_security_gate.py`
 - GitHub settings script tests, **10**: `grep -cE '^\s*def test_' tests/gate/test_github_settings.py`
 - Secret-scan step tests, **5**: `grep -cE '^\s*def test_' tests/gate/test_secret_scan_step.py`
+- Infrastructure step tests, **14**: `grep -cE '^\s*def test_' tests/gate/test_infra_steps.py`
 - Guard tests, **175**: `grep -cE '^\s*def test_' tests/hooks/test_block_hook_bypass.py`
 - Permission deny rules, **8**: `jq '.permissions.deny | length' .claude/settings.json`
 - Hosts on the network allowlist, **8**: `jq '.network.allowed_hosts | length' .claude/security-stack.json`
 - CODEOWNERS entries, **27**: `grep -cvE '^\s*(#|$)' .github/CODEOWNERS`
 - Blocked names, **0**, of them in paths only **0**: `grep -cvE '^\s*(#|$)' .github/blocked-terms.txt` and `grep -cE ' paths$' .github/blocked-terms.txt`
 - Packages in the hash-pinned tool lists, **2, 10 and 7** (gate tools, pre-commit, secret scan): `for f in .github/requirements/*.txt; do printf '%s ' "$f"; grep -cE '^[A-Za-z0-9]' "$f"; done`
-- Action references, **21**, all pinned to a commit SHA: `grep -hoE 'uses: [^ ]+' .github/workflows/*.yml | wc -l` and `grep -hoE 'uses: [^@ ]+@[0-9a-f]{40}' .github/workflows/*.yml | wc -l`
+- Packages in Checkov's list, **96**: `grep -cE '^[A-Za-z0-9]' .github/checkov/requirements.txt`
+- Action references, **24**, all pinned to a commit SHA: `grep -hoE 'uses: [^ ]+' .github/workflows/*.yml | wc -l` and `grep -hoE 'uses: [^@ ]+@[0-9a-f]{40}' .github/workflows/*.yml | wc -l`
 - Packages in `uv.lock`, **49**: `grep -c '^name = ' uv.lock`
 
 On GitHub (read only):

@@ -3,7 +3,9 @@ name: azure-login-check
 # Proves the keyless sign-in from GitHub Actions to Azure (OIDC federated
 # credential) works end to end. Run it by hand from the Actions tab or with
 # `gh workflow run azure-login-check.yml`. It only reads: it shows the
-# resource group the deploy identity can reach.
+# resource group the deploy identity can reach, the deploy identity's role
+# assignments there with their conditions, and whether it can grant each data
+# role the app's managed identity needs.
 on:
   workflow_dispatch:
 
@@ -29,3 +31,86 @@ jobs:
         env:
           RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
         run: az group show --name "$RESOURCE_GROUP" --query "{name:name, location:location, state:properties.provisioningState}" -o table
+
+      # Reads only, and reports only: the sign-in proof above passes or fails on its
+      # own, so a deploy identity that holds Contributor alone still passes here.
+      # The identity's object ID comes from its own token's oid claim, read in a
+      # pipe: the token is never printed or stored.
+      - name: Report the deploy identity's role assignments and the data roles it can grant
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          set -euo pipefail
+          oid=$(az account get-access-token --query accessToken -o tsv | python3 -c '
+          import base64, json, sys
+          part = sys.stdin.read().strip().split(".")[1]
+          print(json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))["oid"])')
+          scope="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP"
+          az role assignment list --scope "$scope" --include-inherited --fill-principal-name false \
+            --query "[?principalId=='$oid'].{role:roleDefinitionName, roleId:roleDefinitionId, scope:scope, condition:condition}" \
+            -o json > "$RUNNER_TEMP/assignments.json"
+          # Each built-in role's ID, looked up by its name in Azure, never typed by
+          # hand; a custom role that reuses the name is ignored. A name Azure doesn't
+          # know reads "unknown" below rather than failing the run.
+          for role in "Owner" "User Access Administrator" "Role Based Access Control Administrator" \
+            "Search Index Data Contributor" "Cognitive Services OpenAI User" "Cognitive Services User" \
+            "Monitoring Metrics Publisher"; do
+            id=$(az role definition list --name "$role" --query "[?roleType=='BuiltInRole'].name | [0]" -o tsv)
+            jq -n --arg name "$role" --arg id "$id" '{($name): $id}'
+          done | jq -s add > "$RUNNER_TEMP/roles.json"
+          python3 - "$RUNNER_TEMP/assignments.json" "$RUNNER_TEMP/roles.json" <<'EOF' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, re, sys
+
+          # The write branch of a role-assignment condition: which roles, and which
+          # principal types, a new assignment may have. Delete branches read @Resource.
+          ROLES = re.compile(r"@Request\[Microsoft\.Authorization/roleAssignments:RoleDefinitionId\]"
+                             r"\s*ForAnyOfAnyValues:GuidEquals\s*\{([^}]*)\}", re.I)
+          TYPES = re.compile(r"@Request\[Microsoft\.Authorization/roleAssignments:PrincipalType\]"
+                             r"\s*ForAnyOfAnyValues:StringEqualsIgnoreCase\s*\{([^}]*)\}", re.I)
+          # Anything else that could narrow a grant: this report can't judge it.
+          OTHER = re.compile(r"roleAssignments:PrincipalId|NotEquals|ForAllOfAnyValues|ForAllOfAllValues", re.I)
+          RANK = {"yes": 2, "unclear": 1, "no": 0}
+
+          def verdict(role_id, condition):
+              """Can an assignment with this condition grant `role_id` to the app's
+              managed identity (a service principal)?"""
+              if not condition:
+                  return "yes"
+              roles = {g.strip().lower() for m in ROLES.findall(condition) for g in m.split(",")}
+              if role_id not in roles:
+                  return "no"
+              types = {t.strip(" '\"").lower() for m in TYPES.findall(condition) for t in m.split(",")}
+              if types and "serviceprincipal" not in types:
+                  return "no"
+              return "unclear" if OTHER.search(condition) else "yes"
+
+          ids = {name: role_id.lower() for name, role_id in json.load(open(sys.argv[2])).items()}
+          # Built-in roles that can create role assignments.
+          GRANTERS = {ids[n] for n in ("Owner", "User Access Administrator",
+                                       "Role Based Access Control Administrator") if ids[n]}
+          # The data roles the app's managed identity needs, each on one resource.
+          NEEDED = ("Search Index Data Contributor", "Cognitive Services OpenAI User",
+                    "Cognitive Services User", "Monitoring Metrics Publisher")
+          rows = json.load(open(sys.argv[1]))
+          print("### The deploy identity's role assignments on the app resource group\n")
+          print("| Role | Scope | Condition |\n| --- | --- | --- |")
+          for r in rows:
+              condition = " ".join((r["condition"] or "(none)").split()).replace("|", "\\|")
+              print(f"| {r['role']} | `{r['scope']}` | `{condition}` |")
+          granters = [r for r in rows if r["roleId"].rsplit("/", 1)[-1].lower() in GRANTERS]
+          print("\n### Data roles the app needs\n")
+          print("| Role | Can the deploy identity grant it to the app's identity? |\n| --- | --- |")
+          short = []
+          for name in NEEDED:
+              role_id = ids[name]
+              if role_id:
+                  found = [verdict(role_id, r["condition"]) for r in granters] or ["no"]
+                  best = max(found, key=RANK.__getitem__)
+              else:
+                  best = "unknown"  # Azure has no built-in role by this name
+              print(f"| {name} (`{role_id or '-'}`) | {best if best == 'yes' else f'**{best}**'} |")
+              if best != "yes":
+                  short.append(f"{name} ({best})")
+          print(f"\nNot confirmed: {', '.join(short)}" if short else "\nAll four can be granted.")
+          EOF

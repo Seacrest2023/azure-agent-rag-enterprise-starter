@@ -29,7 +29,7 @@ This project's values (names, IDs, region) and the status of the stack's own set
 
 ### 1. Create the repository (you)
 
-Create an empty repository on GitHub and clone it on your computer. Start it private, and read [before the repository goes public](enterprise-level-gaps.md#7-before-the-repository-goes-public) before you open it to others.
+Create an empty repository on GitHub and clone it on your computer. Start it private, and read [if your repository is public](enterprise-level-gaps.md#7-if-your-repository-is-public) before you open it to others.
 
 **Check:** the clone works, and GitHub shows the repository as private.
 
