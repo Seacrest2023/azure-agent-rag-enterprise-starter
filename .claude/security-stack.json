@@ -16,6 +16,7 @@
       "squash"
     ]
   },
+  "claude": {"cloud_sessions_change_enforcement": true},
   "network": {
     "$comment": "Hosts an agent may reach without asking the owner: web requests from the terminal, and web fetches. Anything else asks.",
     "allowed_hosts": [
