@@ -2,6 +2,12 @@
 
 What changed in the baseline, newest first. Versions are tagged `vMAJOR.MINOR.PATCH`.
 
+## v0.1.4 (14 October 2026)
+
+### Added
+
+- **The starter checks its own pull requests.** A `starter-check` workflow, required on `main`, refuses a pull request that carries a source repository's own settings or lowerings, or drops a placeholder an adopter fills in (`.github/starter_check.py`). It runs on `pull_request` with a read-only token, reads the files as data, and runs only in a template repository, so a copy made from the starter skips it. `main` now takes changes only through pull requests.
+
 ## v0.1.3 (13 October 2026)
 
 ### Added

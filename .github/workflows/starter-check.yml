@@ -1,0 +1,25 @@
+# The starter only: a pull request into the starter must carry none of its source repository's own settings or
+# lowerings, and keep the placeholders an adopter fills in (.github/starter_check.py). It runs on pull_request,
+# reads the files as data and runs nothing from them, with a read-only token and no secrets. It runs only in a
+# template repository, so a copy made from the template skips it; delete both files in your copy if you like.
+name: starter-check
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  starter-check:
+    if: github.event.repository.is_template
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: No source settings or lowerings; placeholders kept
+        run: python3 .github/starter_check.py
