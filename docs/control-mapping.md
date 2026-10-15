@@ -16,7 +16,7 @@ A check that warns cannot be Full; one that ends in the owner's answer is Partia
 
 ## Coverage at a glance
 
-44, 45 and 51 count in two areas; all 75 checks appear.
+44, 45 and 51 count in two areas; all 76 checks appear.
 
 | Control area | SOC 2 | ISO 27001:2022 Annex A | NIST CSF 2.0 |
 | --- | --- | --- | --- |
@@ -32,11 +32,12 @@ A check that warns cannot be Full; one that ends in the owner's answer is Partia
 | Infrastructure code checked before it deploys | Partial (2): CC7.1, CC8.1 | Partial (2): 8.9, 8.28 | Partial (2): PR |
 | Monitoring of main, settings and cloud | Partial (5): CC4.x, CC7.1, CC7.2 | Partial (5): 8.16 | Partial (5): DE |
 | Logging and immutable history | Partial (1): CC8.1 | Partial (1): 8.15 | Partial (1): DE |
+| The public starter carries none of its source's settings | Partial (1): CC8.1 | Partial (1): 8.32 | Partial (1): PR |
 | User access management: people, MFA, reviews | Not covered: CC6.2, CC6.3 | Not covered: 5.15, 5.16, 5.18 | Not covered: PR |
 | Incident management, backup and recovery | Not covered: CC7.3, CC7.4, CC7.5 | Not covered: 5.24 to 5.28, 5.30, 8.13 | Not covered: RS, RC |
 | Governance, risk, policy and training | Not covered: CC1.x, CC2.x, CC3.x, CC9.1 | Not covered: 5.8, 5.35, 6.3, 6.8 | Not covered: GV |
 
-By check: 37 Full, 38 Partial (warns, needs a person, or runs only on the owner's computer).
+By check: 37 Full, 39 Partial (warns, needs a person, or runs only on the owner's computer).
 
 ## The mapping
 
@@ -98,6 +99,7 @@ The five required jobs run from main's copy of `security-gate.yml`, with tools i
 | 40 Known vulnerabilities | No package with a known vulnerability merges | CC7.1 | 8.8 | ID, PR | Full | python logs |
 | 41 Hash-checked installs for the Python checks; 42 Hash-pinned tools for the security jobs; 43 Seven-day cooldown on package versions | The judging tools are the intended ones; no release under seven days old | CC6.8, CC9.2 | 5.19 to 5.22, 8.19 | PR | Full | python and gate logs; `.github/requirements/`; `uv.lock` |
 | 74 Infrastructure code builds and lints clean; 75 Infrastructure code scanned (Checkov) | A failed run shows infrastructure code that doesn't compile, doesn't lint clean or carries an insecure setting, before the deploy applies it; nothing blocks on it until it's a required check | CC7.1, CC8.1 | 8.9, 8.28 | PR | Partial: warns until required | infra logs |
+| 76 Starter: no source settings or lowerings | The public starter carries none of its source's settings, IDs or lowerings | CC8.1 | 8.32 | PR | Partial: a pull request can change the check | starter-check logs; the ruleset |
 
 ### CI scheduled
 
