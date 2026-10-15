@@ -90,6 +90,7 @@ The columns:
 | 73 | Deploy identity grants only six data roles | Azure setting | Each role assignment it adds or removes | Any other role (Owner, Contributor and every role-granting role included), any role for a user or group, and anything outside the app resource group | Blocks | Platform-enforced | Platform setting: Azure | Turn on (the roles the app needs) | No | Condition on the deploy identity's Role Based Access Control Administrator assignment |
 | 74 | Infrastructure code builds and lints clean | CI on PR | Each PR, and each push to main | Bicep that doesn't compile, or any linter diagnostic, warnings included, in any tracked `.bicep` file | Warns (a failed run; not a required check yet) | Fails visibly | Our code, running the Bicep CLI | Install and pin (the version and the binary's file hash) | Yes | `.github/workflows/infra.yml` (bicep); `.github/bicep/bicep-linux-x64.sha256` |
 | 75 | Infrastructure code scanned (Checkov) | CI on PR | Each PR, and each push to main | Any Checkov finding in the Bicep; a scan that read no resources, or couldn't parse a file | Warns (a failed run; not a required check yet) | Fails visibly | Third-party tool: Checkov | Install and pin (in `.github/checkov/requirements.txt`) | Yes | `.github/workflows/infra.yml` (checkov); `.github/checkov/requirements.txt` |
+| 76 | Starter: no source settings or lowerings | CI on PR | Each PR into the starter's main | A pull request that carries a source repository's own settings, IDs or lowerings, drops a placeholder an adopter fills in, or ships a filled-in blocked-names list | Blocks | Fails closed | Our code | Copy as is (it runs only in a template repository, so a copy skips it) | Yes | `.github/workflows/starter-check.yml`; `.github/starter_check.py` |
 
 ## Each check
 
@@ -729,6 +730,15 @@ The columns:
 - **How to adopt:** comes with `.github/workflows/infra.yml`, the list and the tests. Re-pin the list rather than copying it: resolve Checkov with a seven-day cooldown, then hash the Linux x86_64 wheels for CPython 3.12. The list isn't a trusted job's list: the workflow reads it from the pull request. When the check becomes required, move it into the trusted workflow and the list into `.github/requirements/`, where check 29 freezes it; adding a list there needs the owner's temporary bypass.
 - **Lowering it:** accepting a finding is the owner's recorded decision: an entry naming that resource and check in a Checkov baseline file that the workflow passes to Checkov, and a line in [Lowered from the baseline](#lowered-from-the-baseline). Removing the job or a flag is an enforcement change the guard asks about (no gate refusal); removing the job takes a PR that removes its tests first, as for check 74. The project gives up scanning its infrastructure code.
 
+### 76. Starter: no source settings or lowerings
+- **What it does:** on each pull request into the starter's main, `.github/starter_check.py` reads every file as data and fails on: the switches that let sessions change enforcement and their guard code, a lowering clause, or Checkov findings a source project accepted; a GUID in `.claude/` or `.github/` configuration; the repository owner's handle anywhere but LICENSE; a stack file without `OWNER/REPOSITORY`, or with an `azure` or `claude` section, or with Dependabot's merge-on-green on; CODEOWNERS owners other than `@OWNER`; and a filled-in blocked-names list. The ruleset on main requires it, from GitHub Actions only.
+- **What it stops:** a source repository's own settings, IDs or lowerings reaching the public starter, and a release that drops a placeholder.
+- **Why it exists:** the starter is published from a private source repository that holds its project's values and lowerings. The release checks the export before every push; this check holds on GitHub's side too.
+- **Where it doesn't reach:** the source's private names, whose list can't be public, so the release's local check covers them. It runs on `pull_request`, so a pull request can change the check itself; only the starter's collaborators can open one.
+- **Tested by:** a release pull request that planted the switch letting cloud sessions change enforcement failed it, and passed once the switch was removed (v0.1.4).
+- **How to adopt:** nothing to do: it runs only in a template repository, so a copy made from the starter skips it. Delete both files in your copy if you like.
+- **Lowering it:** remove it from the ruleset's required checks, or change the script; the pull-request rule still holds. The starter gives up checking its pull requests for a source's settings.
+
 ## Lowering a protection
 
 Every check starts at its baseline setting. Lowering one is allowed, but only as the owner's deliberate, recorded decision. This follows the setup prompt's "Rules for the agent" (rule 2) and "The owner's approval":
@@ -747,14 +757,14 @@ Nothing yet: the baseline starts locked down. Each lowering adds a row.
 
 ## Summary
 
-All checks: **75** (`grep -cE '^[|] [0-9]+ [|]' docs/checks-inventory.md`).
+All checks: **76** (`grep -cE '^[|] [0-9]+ [|]' docs/checks-inventory.md`).
 
 By where it runs (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $3}' docs/checks-inventory.md | sort | uniq -c`):
 
 ```text
       7 Azure setting
       1 By hand
-     26 CI on PR
+     27 CI on PR
       2 CI scheduled
       1 CI, run by hand
      12 Claude Code hook
@@ -767,7 +777,7 @@ By where it runs (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $3}' docs/checks-inve
 By type (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $8}' docs/checks-inventory.md | sed -E 's/^Our code, running .*/Our code, running a tool/; s/^Third-party tool: .*/Third-party tool/' | sort | uniq -c`):
 
 ```text
-     25 Our code
+     26 Our code
      19 Our code, running a tool
       7 Platform setting: Azure
      14 Platform setting: GitHub
@@ -778,7 +788,7 @@ By how it's adopted (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $9}' docs/checks-i
 
 ```text
       8 Copy and set values
-     28 Copy as is
+     29 Copy as is
      20 Install and pin
      19 Turn on
 ```
@@ -788,7 +798,7 @@ None is "Write your own".
 By whether it blocks (`awk -F' [|] ' '/^[|] [0-9]+ [|]/ {print $6}' docs/checks-inventory.md | sed -E 's/ [(].*//' | sort | uniq -c`):
 
 ```text
-     62 Blocks
+     63 Blocks
      13 Warns
 ```
 

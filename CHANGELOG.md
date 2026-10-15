@@ -2,6 +2,12 @@
 
 What changed in the baseline, newest first. Versions are tagged `vMAJOR.MINOR.PATCH`.
 
+## v0.1.5 (15 October 2026)
+
+### Changed
+
+- **The checks inventory and the control mapping list the starter's own check,** `starter-check`, with what it stops, where it doesn't reach, and how it was proven.
+
 ## v0.1.4 (14 October 2026)
 
 ### Added
